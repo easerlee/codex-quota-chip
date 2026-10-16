@@ -6,3 +6,5 @@ publish/
 logs/
 settings.json
 accounts.json
+
+*.log
