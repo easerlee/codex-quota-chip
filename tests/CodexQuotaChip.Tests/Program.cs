@@ -247,28 +247,30 @@ static void TestExeReResolve()
 
 static void TestAutostart()
 {
+    // A scratch value name: the test must never touch the entry the installed app uses.
+    const string name = "CodexQuotaChipSelfTest";
     var directory = Path.Combine(Path.GetTempPath(), "cqc-autostart-" + Guid.NewGuid().ToString("N"));
     Directory.CreateDirectory(directory);
     var log = new Log(Path.Combine(directory, "test.log"));
     try
     {
-        Autostart.SetEnabled(false, log);
-        Equal(false, Autostart.IsEnabled(), "autostart starts disabled");
+        Autostart.SetEnabled(false, log, name);
+        Equal(false, Autostart.IsEnabled(name), "the scratch entry starts absent");
 
-        if (!Autostart.SetEnabled(true, log))
+        if (!Autostart.SetEnabled(true, log, name))
         {
             // A confined environment can deny the registry write; that is not a code failure.
             Console.WriteLine("     (skipped: this environment does not allow writing the Run key)");
             return;
         }
 
-        Equal(true, Autostart.IsEnabled(), "autostart reports enabled");
-        Equal(true, Autostart.SetEnabled(false, log), "and can be turned off again");
-        Equal(false, Autostart.IsEnabled(), "autostart reports disabled");
+        Equal(true, Autostart.IsEnabled(name), "autostart reports enabled");
+        Equal(true, Autostart.SetEnabled(false, log, name), "and can be turned off again");
+        Equal(false, Autostart.IsEnabled(name), "autostart reports disabled");
     }
     finally
     {
-        Autostart.SetEnabled(false, log);
+        Autostart.SetEnabled(false, log, name);
         Directory.Delete(directory, recursive: true);
     }
 }

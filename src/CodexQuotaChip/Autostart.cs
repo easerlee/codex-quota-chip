@@ -8,12 +8,12 @@ public static class Autostart
     public const string ValueName = "CodexQuotaChip";
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
 
-    public static bool IsEnabled()
+    public static bool IsEnabled(string valueName = ValueName)
     {
         try
         {
             using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath);
-            return key?.GetValue(ValueName) is string value && value.Length > 0;
+            return key?.GetValue(valueName) is string value && value.Length > 0;
         }
         catch (Exception)
         {
@@ -21,7 +21,7 @@ public static class Autostart
         }
     }
 
-    public static bool SetEnabled(bool enabled, Log log)
+    public static bool SetEnabled(bool enabled, Log log, string valueName = ValueName)
     {
         try
         {
@@ -34,7 +34,7 @@ public static class Autostart
 
             if (!enabled)
             {
-                key.DeleteValue(ValueName, throwOnMissingValue: false);
+                key.DeleteValue(valueName, throwOnMissingValue: false);
                 return true;
             }
 
@@ -45,7 +45,7 @@ public static class Autostart
                 return false;
             }
 
-            key.SetValue(ValueName, $"\"{exe}\"", RegistryValueKind.String);
+            key.SetValue(valueName, $"\"{exe}\"", RegistryValueKind.String);
             return true;
         }
         catch (Exception error)

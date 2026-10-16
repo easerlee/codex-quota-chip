@@ -2,7 +2,9 @@
 # No administrator rights needed, nothing is written outside the two places below.
 param(
     [switch]$Autostart,
-    [string]$Target = (Join-Path $env:LOCALAPPDATA 'Programs\CodexQuotaChip')
+    # The known folder, not $env:LOCALAPPDATA: that variable can be overridden by the caller and
+    # would quietly install somewhere else.
+    [string]$Target = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\CodexQuotaChip')
 )
 
 $ErrorActionPreference = 'Stop'

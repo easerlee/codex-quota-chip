@@ -2,7 +2,9 @@
 # (%LOCALAPPDATA%\CodexQuotaChip), which is where the account history lives.
 param(
     [switch]$Purge,
-    [string]$Target = (Join-Path $env:LOCALAPPDATA 'Programs\CodexQuotaChip')
+    # The known folder, not $env:LOCALAPPDATA: that variable can be overridden by the caller and
+    # would quietly remove something else.
+    [string]$Target = (Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Programs\CodexQuotaChip')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,7 +23,7 @@ if (Test-Path $Target) {
 }
 
 if ($Purge) {
-    $state = Join-Path $env:LOCALAPPDATA 'CodexQuotaChip'
+    $state = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'CodexQuotaChip'
     if (Test-Path $state) {
         Remove-Item $state -Recurse -Force
         Write-Host "removed state: $state"

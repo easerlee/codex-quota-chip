@@ -112,7 +112,11 @@ internal sealed class AppServer : IDisposable
 
         // One pending read at a time, kept across timeouts: re-issuing it would leave two
         // readers on the same stream.
-        var pending = _process.StandardOutput.ReadLineAsync();
+        // One pending read at a time, and only ever issued after the previous one has been
+        // consumed: starting a second read on the same stream fails with "the stream is
+        // currently in use". A read that is still pending when the answer arrives must not be
+        // left behind either - the next call on this process would collide with it.
+        Task<string?>? pending = null;
         var deadline = DateTimeOffset.UtcNow + timeout;
         while (true)
         {
@@ -123,13 +127,14 @@ internal sealed class AppServer : IDisposable
                 throw new TimeoutException($"{method} timed out{await StderrHintAsync().ConfigureAwait(false)}");
             }
 
+            pending ??= _process.StandardOutput.ReadLineAsync();
             if (await Task.WhenAny(pending, Task.Delay(remaining, cancellationToken)).ConfigureAwait(false) != pending)
             {
                 continue;
             }
 
             var line = await pending.ConfigureAwait(false);
-            pending = _process.StandardOutput.ReadLineAsync();
+            pending = null;
 
             if (line is null)
             {
