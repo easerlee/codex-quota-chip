@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>CodexQuotaChip</RootNamespace>
+    <AssemblyName>CodexQuotaChip</AssemblyName>
+    <Version>0.1.0</Version>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Product>Codex Quota Chip</Product>
+    <Description>A compact taskbar overlay that shows the Codex quota left, plus a right-click panel with every account seen so far.</Description>
+    <Authors>easerlee</Authors>
+  </PropertyGroup>
+
+</Project>

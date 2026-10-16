@@ -1,0 +1,38 @@
+<Window x:Class="CodexQuotaChip.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
+        Title="Codex Quota Chip"
+        Width="116"
+        Height="48"
+        WindowStyle="None"
+        WindowStartupLocation="Manual"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        Background="#01FFFFFF"
+        FontFamily="YaHei Consolas Hybrid, Consolas, Segoe UI"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        Loaded="OnLoaded"
+        SourceInitialized="OnSourceInitialized"
+        Closing="OnClosing"
+        MouseLeftButtonUp="OnLeftClick"
+        MouseRightButtonUp="OnRightClick">
+    <!-- The window is never activated and never shows a frame; the glass frame is what keeps the
+         text rendered with ClearType instead of the blurry path a transparent window would use. -->
+    <shell:WindowChrome.WindowChrome>
+        <shell:WindowChrome CaptionHeight="0"
+                            CornerRadius="0"
+                            GlassFrameThickness="-1"
+                            ResizeBorderThickness="0"
+                            UseAeroCaptionButtons="False" />
+    </shell:WindowChrome.WindowChrome>
+
+    <!-- The 2px vertical inset is what keeps the rows at ~14.7px on a 48px taskbar, which is
+         where the text size is derived from. -->
+    <Grid x:Name="Root" Margin="3,2,3,2" />
+</Window>
