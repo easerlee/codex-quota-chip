@@ -35,11 +35,14 @@ zip 里的 `uninstall.ps1 -Purge`，或手动删那个目录。
 发布由 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) 在 CI 里完成，
 用 **Trusted Publishing（OIDC）**，仓库和本机都不存 npm token：
 
-1. `..\build-publish.ps1 -Version 0.2.1` 出新的 zip，记下它的 sha256
-2. 把本目录 `package.json` 的 `version` 和 `codexQuotaChip.sha256` 一起改成 `0.2.1` / 新哈希，
+1. **先把这次的代码改动提交干净**。产物里会写进打包那一刻的 `HEAD`（就是 `0.2.4+<sha>` 那串），
+   先打包后提交的话，它指向的是上一个提交 —— 2026-10-18 的 0.2.4 就是这么来的：功能没错，
+   但版本串对不上，事后查证要多花一道功夫。顺序是：改代码 → 提交 → 再打包。
+2. `..\build-publish.ps1 -Version 0.2.1` 出新的 zip，记下它的 sha256
+3. 把本目录 `package.json` 的 `version` 和 `codexQuotaChip.sha256` 一起改成 `0.2.1` / 新哈希，
    并同步 `..\src\CodexQuotaChip\CodexQuotaChip.csproj` 的 `<Version>`，提交
-3. 建 GitHub Release `v0.2.1` 并上传 zip（先建 draft、传完资源再公开，免得 CI 抢跑）
-4. Release 一公开，tag 就有了，workflow 自动跑：校验 tag 与 version 一致、校验 Release 上的
+4. 建 GitHub Release `v0.2.1` 并上传 zip（先建 draft、传完资源再公开，免得 CI 抢跑）
+5. Release 一公开，tag 就有了，workflow 自动跑：校验 tag 与 version 一致、校验 Release 上的
    zip 哈希与 `package.json` 一致，然后 `npm publish --provenance`
 
 `version` 与 tag 不一致、或 zip 哈希对不上时，workflow **会拒绝发布** —— 因为安装脚本就是按
