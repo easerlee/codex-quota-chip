@@ -83,6 +83,13 @@ pwsh -File .\install.ps1 -Autostart # 顺便写开机自启
 也可以直接双击 zip 里的 `CodexQuotaChip.exe` 运行（自包含，不需要预装 .NET）。
 开机自启也可以在面板里开关；`uninstall.ps1` 会去掉自启项和安装目录（加 `-Purge` 连状态文件一起删）。
 
+用 npm 装也行 —— 那个包只是个外壳：安装时去对应版本的 Release 下载 zip，校验 sha256 通过后才解压：
+
+```sh
+npm install -g codex-quota-chip
+codex-quota-chip --check
+```
+
 需要：Windows 10/11 x64；已安装并登录 Windows 桌面版 Codex（程序会从
 `%LOCALAPPDATA%\OpenAI\Codex\bin\*\codex.exe` 或 `PATH` 里找 `codex.exe`）。
 
