@@ -10,7 +10,7 @@ var tests = new (string Name, Action Body)[]
     ("quota answer parsing", TestParsing),
     ("windows are classified by duration, not position", TestClassification),
     ("reading is turned into text", TestReadout),
-    ("a reset is a reset time that moved forward", TestResetWatch),
+    ("a reset is nearly a whole window, not drift", TestResetWatch),
     ("reset credits come out of the same answer", TestResetCredits),
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
@@ -117,36 +117,44 @@ static void TestReadout()
 static void TestResetWatch()
 {
     const long was = 1_700_000_000;
-    const long now = was + 18_000;
+    const long fiveHourLater = was + 5 * 3600;          // 5 小时窗口整轮翻篇
+    const long weekLater = was + 7 * 24 * 3600;         // 周窗口整轮翻篇
+    const long drifted = was + 300;                     // 服务端把周窗口末尾往后滑了几分钟
 
-    // The only thing that counts as a reset: the server moved the window's reset time forward.
-    var rolled = ResetWatch.Check(was, was, now, was);
-    Equal(true, rolled.FiveHour, "the 5-hour window rolled over");
-    Equal(false, rolled.Week, "the week window did not");
-    Equal(true, rolled.Any, "something rolled over");
-    Equal(true, ResetWatch.Check(was, was, now, now).Any, "both windows rolling over counts");
+    // A rollover moves the end of the window forward by nearly the whole window.
+    var five = ResetWatch.Check(was, was, fiveHourLater, was);
+    Equal(true, five.FiveHour, "a five-hour rollover counts");
+    Equal(false, five.Week, "the week window did not move");
+    Equal(true, five.Any, "so something rolled over");
 
-    // No news: the same reset time, an older one (clock skew on the server side), or nothing known
-    // yet - a window that had no reset time is the start of one, not the end.
-    Equal(false, ResetWatch.Check(was, was, was, was).Any, "unchanged reset times are not a reset");
-    Equal(false, ResetWatch.Check(now, now, was, was).Any, "an earlier reset time is not a reset");
-    Equal(false, ResetWatch.Check(null, null, now, now).Any, "a window that had no reset time is not a reset");
+    var week = ResetWatch.Check(was, was, was, weekLater);
+    Equal(false, week.FiveHour, "an unchanged five-hour window");
+    Equal(true, week.Week, "a weekly rollover counts");
+    Equal(true, ResetWatch.Check(was, was, fiveHourLater, weekLater).Any, "both at once counts");
+
+    // The bug this rule exists to prevent: the weekly window's end slides along with usage, so a
+    // few minutes - or an hour - of drift between readings is not a reset. "Moved forward at all"
+    // announced a reset every couple of minutes.
+    Equal(false, ResetWatch.Check(was, was, drifted, drifted).Any, "a few minutes of drift is not a reset");
+    Equal(false, ResetWatch.Check(was, was, was, was + 3600).Any, "an hour of drift on the week window is not a reset");
+    Equal(false, ResetWatch.Check(was, was, was, was + 18_000).Any, "five hours is still not most of a week");
+
+    // No news: the same time, an older one, or nothing on file - a window with no reset time is a
+    // window starting, not one ending.
+    Equal(false, ResetWatch.Check(was, was, was, was).Any, "an unchanged reset time is not a reset");
+    Equal(false, ResetWatch.Check(fiveHourLater, fiveHourLater, was, was).Any, "an earlier reset time is not a reset");
+    Equal(false, ResetWatch.Check(null, null, fiveHourLater, weekLater).Any, "a window that had no reset time is not a reset");
     Equal(false, ResetWatch.Check(was, was, null, null).Any, "a window that lost its reset time is not a reset");
-
-    // Half known: one window rolls over while the other one did not move.
-    var half = ResetWatch.Check(was, was, was, now);
-    Equal(false, half.FiveHour, "an unchanged 5-hour window");
-    Equal(true, half.Week, "a rolled-over week window");
-    Equal(false, ResetWatch.Check(was, null, was, now).Week,
+    Equal(false, ResetWatch.Check(was, null, was, weekLater).Week,
         "a window the file knew nothing about is a start, not a reset");
 
     // The wording has to say which window and what is available now.
     Equal("5 小时额度已重置，现在剩余 100%",
-        ResetWatch.Check(was, was, now, was).Describe(100, 42), "5-hour wording");
+        ResetWatch.Check(was, was, fiveHourLater, was).Describe(100, 42), "5-hour wording");
     Equal("周额度已重置，现在剩余 8%",
-        ResetWatch.Check(was, was, was, now).Describe(50, 8.0), "week wording");
+        ResetWatch.Check(was, was, was, weekLater).Describe(50, 8.0), "week wording");
     Equal("5 小时和周额度都已重置，额度已恢复",
-        ResetWatch.Check(was, was, now, now).Describe(null, null), "both windows, no figures");
+        ResetWatch.Check(was, was, fiveHourLater, weekLater).Describe(null, null), "both windows, no figures");
 }
 
 static void TestResetCredits()
