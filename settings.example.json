@@ -2,5 +2,6 @@
   "refresh_seconds": 60,
   "display_side": "right",
   "warn_below": 30,
-  "critical_below": 15
+  "critical_below": 15,
+  "notify_on_reset": true
 }

@@ -29,6 +29,7 @@ public sealed class ChipPanel : Border
     private readonly StackPanel _rows = new();
     private readonly Action _refresh;
     private readonly Func<bool> _toggleAutostart;
+    private readonly Func<bool> _toggleNotifications;
     private readonly Action<int> _setRefreshSeconds;
     private readonly Action<string> _setDisplaySide;
     private readonly Action _exit;
@@ -36,12 +37,14 @@ public sealed class ChipPanel : Border
     public ChipPanel(
         Action refresh,
         Func<bool> toggleAutostart,
+        Func<bool> toggleNotifications,
         Action<int> setRefreshSeconds,
         Action<string> setDisplaySide,
         Action exit)
     {
         _refresh = refresh;
         _toggleAutostart = toggleAutostart;
+        _toggleNotifications = toggleNotifications;
         _setRefreshSeconds = setRefreshSeconds;
         _setDisplaySide = setDisplaySide;
         _exit = exit;
@@ -103,6 +106,7 @@ public sealed class ChipPanel : Border
         _rows.Children.Add(SettingRow("显示位置", new Segmented(
             ["左", "右"], settings.DisplayLeft ? 0 : 1, index => _setDisplaySide(index == 0 ? "left" : "right"))));
         _rows.Children.Add(AutostartRow(autostart));
+        _rows.Children.Add(SwitchRow("额度重置时通知", settings.NotifyOnReset, _toggleNotifications));
         _rows.Children.Add(Divider());
         _rows.Children.Add(CommandRow("退出", _exit, danger: true));
     }
@@ -312,23 +316,26 @@ public sealed class ChipPanel : Border
     // The autostart row keeps the label column of the rows above but ends in a switch, with no
     // hover plate: the switch itself is the affordance. The switch takes the state the registry
     // ended up in, not the intent of the click, and the panel stays open so it is seen moving.
-    private UIElement AutostartRow(bool autostart)
+    private UIElement AutostartRow(bool autostart) =>
+        SwitchRow("开机自动启动", autostart, _toggleAutostart);
+
+    private static UIElement SwitchRow(string text, bool on, Func<bool> toggle)
     {
-        var toggle = new Switch(autostart);
+        var control = new Switch(on);
 
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(LabelWidth + BarWidth) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var label = Caption("开机自动启动", Theme.Panel.Text, 12.5);
+        var label = Caption(text, Theme.Panel.Text, 12.5);
         label.VerticalAlignment = VerticalAlignment.Center;
         Grid.SetColumn(label, 0);
         row.Children.Add(label);
 
-        toggle.HorizontalAlignment = HorizontalAlignment.Right;
-        toggle.VerticalAlignment = VerticalAlignment.Center;
-        Grid.SetColumn(toggle, 1);
-        row.Children.Add(toggle);
+        control.HorizontalAlignment = HorizontalAlignment.Right;
+        control.VerticalAlignment = VerticalAlignment.Center;
+        Grid.SetColumn(control, 1);
+        row.Children.Add(control);
 
         var host = new Border
         {
@@ -337,7 +344,7 @@ public sealed class ChipPanel : Border
             Background = Brushes.Transparent,
             Child = row
         };
-        host.MouseLeftButtonUp += (_, _) => toggle.Show(_toggleAutostart());
+        host.MouseLeftButtonUp += (_, _) => control.Show(toggle());
         return host;
     }
 

@@ -24,6 +24,10 @@ public sealed class Settings
     [JsonPropertyName("critical_below")]
     public double CriticalBelow { get; set; } = 15;
 
+    // Raise a Windows notification when a quota window resets (its reset time moves forward).
+    [JsonPropertyName("notify_on_reset")]
+    public bool NotifyOnReset { get; set; } = true;
+
     [JsonIgnore]
     public bool DisplayLeft => string.Equals(DisplaySide, "left", StringComparison.OrdinalIgnoreCase);
 
@@ -32,7 +36,8 @@ public sealed class Settings
         RefreshSeconds = RefreshSeconds,
         DisplaySide = DisplaySide,
         WarnBelow = WarnBelow,
-        CriticalBelow = CriticalBelow
+        CriticalBelow = CriticalBelow,
+        NotifyOnReset = NotifyOnReset
     };
 
     public void Normalize()

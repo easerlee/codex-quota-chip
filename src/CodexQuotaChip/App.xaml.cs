@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Threading;
+using System.Windows.Interop;
 using System.Windows.Threading;
 
 namespace CodexQuotaChip;
@@ -33,6 +35,13 @@ public partial class App : Application
         if (Has(e.Args, "--once"))
         {
             Once(codexHome, codexExe);
+            Shutdown();
+            return;
+        }
+
+        if (Has(e.Args, "--notify-test"))
+        {
+            NotifyTest(_log);
             Shutdown();
             return;
         }
@@ -88,6 +97,32 @@ public partial class App : Application
             plan = reading.PlanType,
             error = reading.Error
         }, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    // --notify-test: prove the notification works without waiting for a real reset. It needs a
+    // window handle, so a hidden window is shown just long enough to hold the balloon up.
+    private static void NotifyTest(Log log)
+    {
+        Win32.AttachToParentConsole();
+        var window = new Window
+        {
+            Width = 1,
+            Height = 1,
+            ShowInTaskbar = false,
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = true,
+            Opacity = 0
+        };
+        window.Show();
+
+        using var notifier = new Notifier(new WindowInteropHelper(window).Handle, log);
+        var shown = notifier.Show("Codex 额度已重置", "测试通知：看到这条就说明重置提醒能弹出来");
+
+        Console.WriteLine(shown
+            ? "notification sent (look above the notification area)"
+            : "the shell refused the notification; see the log for the reason");
+        Thread.Sleep(TimeSpan.FromSeconds(8));
+        window.Close();
     }
 
     private static void ApplyOverrides(Settings settings, string[] args)

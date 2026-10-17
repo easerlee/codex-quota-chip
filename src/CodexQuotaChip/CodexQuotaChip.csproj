@@ -2,10 +2,13 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- The Windows version in the target framework is what brings in the WinRT projection used
+         for toast notifications; the app itself still runs on anything the .NET 8 desktop runtime
+         supports, and falls back to a notification-area balloon if the toast API is not there. -->
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>CodexQuotaChip</RootNamespace>
     <AssemblyName>CodexQuotaChip</AssemblyName>
-    <Version>0.1.0</Version>
+    <Version>0.2.0</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>

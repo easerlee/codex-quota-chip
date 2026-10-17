@@ -10,6 +10,8 @@ var tests = new (string Name, Action Body)[]
     ("quota answer parsing", TestParsing),
     ("windows are classified by duration, not position", TestClassification),
     ("reading is turned into text", TestReadout),
+    ("a reset is a reset time that moved forward", TestResetWatch),
+    ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
     ("bar geometry ignores the label", TestBarGeometry),
@@ -109,6 +111,57 @@ static void TestReadout()
         Readout.Clock(epoch),
         "clock format");
     Equal("reset now", Readout.Countdown(now.AddMinutes(-1).ToUnixTimeSeconds()), "an expired countdown");
+}
+
+static void TestResetWatch()
+{
+    const long was = 1_700_000_000;
+    const long now = was + 18_000;
+
+    // The only thing that counts as a reset: the server moved the window's reset time forward.
+    var rolled = ResetWatch.Check(was, was, now, was);
+    Equal(true, rolled.FiveHour, "the 5-hour window rolled over");
+    Equal(false, rolled.Week, "the week window did not");
+    Equal(true, rolled.Any, "something rolled over");
+    Equal(true, ResetWatch.Check(was, was, now, now).Any, "both windows rolling over counts");
+
+    // No news: the same reset time, an older one (clock skew on the server side), or nothing known
+    // yet - a window that had no reset time is the start of one, not the end.
+    Equal(false, ResetWatch.Check(was, was, was, was).Any, "unchanged reset times are not a reset");
+    Equal(false, ResetWatch.Check(now, now, was, was).Any, "an earlier reset time is not a reset");
+    Equal(false, ResetWatch.Check(null, null, now, now).Any, "a window that had no reset time is not a reset");
+    Equal(false, ResetWatch.Check(was, was, null, null).Any, "a window that lost its reset time is not a reset");
+
+    // Half known: one window rolls over while the other one did not move.
+    var half = ResetWatch.Check(was, was, was, now);
+    Equal(false, half.FiveHour, "an unchanged 5-hour window");
+    Equal(true, half.Week, "a rolled-over week window");
+    Equal(false, ResetWatch.Check(was, null, was, now).Week,
+        "a window the file knew nothing about is a start, not a reset");
+
+    // The wording has to say which window and what is available now.
+    Equal("5 小时额度已重置，现在剩余 100%",
+        ResetWatch.Check(was, was, now, was).Describe(100, 42), "5-hour wording");
+    Equal("周额度已重置，现在剩余 8%",
+        ResetWatch.Check(was, was, was, now).Describe(50, 8.0), "week wording");
+    Equal("5 小时和周额度都已重置，额度已恢复",
+        ResetWatch.Check(was, was, now, now).Describe(null, null), "both windows, no figures");
+}
+
+static void TestToastPayload()
+{
+    var payload = Notifier.BuildXml("Codex 额度已重置", "5 小时额度已重置，现在剩余 100%");
+    Equal(true, payload.StartsWith("<toast>"), "starts with the toast element");
+    Equal(true, payload.EndsWith("</toast>"), "closes it");
+    Equal(true, payload.Contains("<text>Codex 额度已重置</text>"), "the title is in it");
+    Equal(true, payload.Contains("<text>5 小时额度已重置，现在剩余 100%</text>"), "so is the body");
+    Equal(true, payload.Contains("template=\"ToastGeneric\""), "and the template the shell expects");
+
+    // The one thing here with a wrong answer: text that the XML reader would otherwise eat.
+    var escaped = Notifier.BuildXml("a & b", "5 < 6 > 4 & 2");
+    Equal(true, escaped.Contains("<text>a &amp; b</text>"), "an ampersand in the title");
+    Equal(true, escaped.Contains("<text>5 &lt; 6 &gt; 4 &amp; 2</text>"), "and comparisons in the body");
+    Equal(10, escaped.Count(character => character == '<'), "only the markup's own brackets are left");
 }
 
 static void TestAccountOrder()

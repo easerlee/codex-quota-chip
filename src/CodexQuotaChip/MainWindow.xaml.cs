@@ -31,6 +31,7 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _panelGuard = new();
 
     private ChipPanel? _panel;
+    private Notifier? _notifier;
     private IntPtr _handle;
     private QuotaReading? _reading;
     private string? _lastError;
@@ -118,7 +119,7 @@ public partial class MainWindow : Window
 
     private void BuildPanel()
     {
-        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, SetRefreshSeconds, SetDisplaySide, Exit);
+        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, SetRefreshSeconds, SetDisplaySide, Exit);
         _popup.PlacementTarget = this;
         _popup.Placement = PlacementMode.Custom;
         _popup.StaysOpen = false;
@@ -299,6 +300,13 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Compare against the record already on file, before replacing it: a reset time that moved
+        // forward means that window just refilled.
+        var before = _accounts.Load().FirstOrDefault(
+            record => string.Equals(record.Id, identity.Id, StringComparison.OrdinalIgnoreCase));
+        var rollover = ResetWatch.Check(
+            before?.FiveHourResetsAt, before?.WeekResetsAt, reading.FiveHour?.ResetsAt, reading.Weekly?.ResetsAt);
+
         _accounts.Upsert(new AccountRecord(
             identity.Id,
             identity.Email,
@@ -308,6 +316,13 @@ public partial class MainWindow : Window
             reading.FiveHour?.ResetsAt,
             reading.Weekly?.RemainingPercent,
             reading.Weekly?.ResetsAt));
+
+        if (rollover.Any && _settings.NotifyOnReset)
+        {
+            _notifier?.Show("Codex 额度已重置", rollover.Describe(
+                reading.FiveHour?.RemainingPercent, reading.Weekly?.RemainingPercent));
+            _log.Info($"quota reset notified (5h={rollover.FiveHour}, week={rollover.Week})");
+        }
     }
 
     // ---------------------------------------------------------------- painting
@@ -403,6 +418,15 @@ public partial class MainWindow : Window
         return Autostart.IsEnabled();
     }
 
+    // Unlike autostart this one is ours alone, so the switch just shows what got saved.
+    private bool ToggleNotifications()
+    {
+        _settings.NotifyOnReset = !_settings.NotifyOnReset;
+        _settings.Normalize();
+        SettingsFile.Save(_paths.Settings, _settings, _log);
+        return _settings.NotifyOnReset;
+    }
+
     private void Exit()
     {
         _closing = true;
@@ -417,6 +441,7 @@ public partial class MainWindow : Window
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
         _handle = new WindowInteropHelper(this).Handle;
+        _notifier = new Notifier(_handle, _log);
         Win32.MakeOverlayWindow(_handle);
         Win32.Own(new TaskbarOwner(_handle));
         Snap();
@@ -430,6 +455,7 @@ public partial class MainWindow : Window
         _placementTimer.Stop();
         _panelGuard.Stop();
         _popup.IsOpen = false;
+        _notifier?.Dispose();
 
         if (!_closing)
         {
