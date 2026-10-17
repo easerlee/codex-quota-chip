@@ -12,6 +12,19 @@ $ErrorActionPreference = 'Stop'
 Get-Process CodexQuotaChip -ErrorAction SilentlyContinue | Stop-Process -Force
 
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+# Installing somewhere other than the default (install.ps1 -Target D:\Program Files\CodexQuotaChip)
+# means the default path below is empty and the real folder would be left behind, so ask the
+# autostart entry where the program actually is. Only a folder that is named CodexQuotaChip and
+# still holds the executable is touched.
+$entry = (Get-ItemProperty -Path $runKey -ErrorAction SilentlyContinue).CodexQuotaChip
+if ($entry) {
+    $installedDir = Split-Path ($entry.Trim('"')) -Parent
+    if ($installedDir -and (Split-Path $installedDir -Leaf) -eq 'CodexQuotaChip' -and
+        $installedDir -ne $Target -and (Test-Path (Join-Path $installedDir 'CodexQuotaChip.exe'))) {
+        $Target = $installedDir
+    }
+}
+
 if ((Get-ItemProperty -Path $runKey -ErrorAction SilentlyContinue).PSObject.Properties.Name -contains 'CodexQuotaChip') {
     Remove-ItemProperty -Path $runKey -Name 'CodexQuotaChip'
     Write-Host 'autostart: removed'
