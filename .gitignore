@@ -8,3 +8,6 @@ settings.json
 accounts.json
 
 *.log
+
+*.tgz
+npm/vendor/
