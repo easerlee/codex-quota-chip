@@ -5,13 +5,31 @@ namespace CodexQuotaChip;
 // One rate-limit window as the server described it: how much is left and when it refills.
 public sealed record UsageWindow(int? DurationMinutes, double? RemainingPercent, long? ResetsAt);
 
+// The reset credits ("tickets") on the account: how many are still usable, and when the one that
+// expires first does. Only what the server counts as available is kept - redeemed and expired
+// credits are skipped while parsing.
+public sealed record ResetCredits(int Available, long? ExpiresAt)
+{
+    public bool Expired(DateTimeOffset now) => ExpiresAt is long at && at <= now.ToUnixTimeSeconds();
+
+    // What the icon means, in words, for its tooltip.
+    public string Describe(DateTimeOffset now)
+    {
+        var count = Available == 1 ? "1 次额度重置可用" : $"{Available} 次额度重置可用";
+        return ExpiresAt is long at
+            ? $"{count}（最近 {DateTimeOffset.FromUnixTimeSeconds(at).ToLocalTime():yyyy-MM-dd} 到期）"
+            : count;
+    }
+}
+
 // The reading for whoever is logged in right now.
 public sealed record QuotaReading(
     UsageWindow? FiveHour,
     UsageWindow? Weekly,
     string? PlanType,
     DateTimeOffset At,
-    string? Error = null)
+    string? Error = null,
+    ResetCredits? Resets = null)
 {
     public static QuotaReading Failed(string error) => new(null, null, null, DateTimeOffset.Now, error);
 
@@ -46,7 +64,40 @@ public static class QuotaParser
         }
 
         var (fiveHour, weekly) = Classify([Window(limits, "primary"), Window(limits, "secondary")]);
-        return new QuotaReading(fiveHour, weekly, Text(limits, "planType"), DateTimeOffset.Now);
+        return new QuotaReading(fiveHour, weekly, Text(limits, "planType"), DateTimeOffset.Now, null, Resets(answer));
+    }
+
+    // { rateLimitResetCredits: { availableCount, credits: [ { status, expiresAt } ] } } sits beside
+    // rateLimits, not inside it. A missing section means an account or a server build without the
+    // feature, which is not an error: the panel then simply shows no tickets.
+    public static ResetCredits? Resets(JsonElement answer)
+    {
+        if (answer.ValueKind != JsonValueKind.Object ||
+            !answer.TryGetProperty("rateLimitResetCredits", out var credits) ||
+            credits.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        long? soonest = null;
+        if (credits.TryGetProperty("credits", out var list) && list.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var credit in list.EnumerateArray())
+            {
+                if (credit.ValueKind != JsonValueKind.Object ||
+                    !string.Equals(Text(credit, "status"), "available", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (Long(credit, "expiresAt") is long expires && (soonest is null || expires < soonest))
+                {
+                    soonest = expires;
+                }
+            }
+        }
+
+        return new ResetCredits(Integer(credits, "availableCount") ?? 0, soonest);
     }
 
     // Which window is the 5-hour one is decided by its own duration, never by position: the

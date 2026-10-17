@@ -11,7 +11,9 @@ public sealed record AccountRecord(
     double? FiveHourLeft,
     long? FiveHourResetsAt,
     double? WeekLeft,
-    long? WeekResetsAt);
+    long? WeekResetsAt,
+    int? ResetCredits = null,
+    long? ResetCreditsExpireAt = null);
 
 // One record per account, rewritten in place: because the key is the account, switching away
 // leaves the old record exactly as it was, which is the point - it shows what that account had

@@ -1,5 +1,6 @@
 using System.Windows.Input;
 using System.Windows.Media.Effects;
+using System.Windows.Media.Imaging;
 using Cursors = System.Windows.Input.Cursors;
 
 namespace CodexQuotaChip;
@@ -94,7 +95,9 @@ public sealed class ChipPanel : Border
             first = false;
             _rows.Children.Add(AccountHead(
                 AccountIdentity.Label(account.Email, account.Id),
-                AccountOrder.IsCurrent(account, currentId)));
+                AccountOrder.IsCurrent(account, currentId),
+                new ResetCredits(account.ResetCredits ?? 0, account.ResetCreditsExpireAt),
+                now));
             _rows.Children.Add(Metric("5H", account.FiveHourLeft, account.FiveHourResetsAt, now, settings, weekly: false, valueWidth, resetWidth));
             _rows.Children.Add(Metric("WK", account.WeekLeft, account.WeekResetsAt, now, settings, weekly: true, valueWidth, resetWidth));
         }
@@ -132,15 +135,17 @@ public sealed class ChipPanel : Border
         return offered;
     }
 
-    private static UIElement AccountHead(string name, bool current)
+    // The account name, with that account's reset tickets sitting on the right-hand edge of the
+    // row - the same edge the metrics' reset column ends on. A right-aligned strip grows leftwards,
+    // so a second ticket lands to the left of the first.
+    private static UIElement AccountHead(string name, bool current, ResetCredits resets, DateTimeOffset now)
     {
-        var row = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(RowInset, 6, RowInset, 4)
-        };
+        var row = new Grid { Margin = new Thickness(RowInset, 6, RowInset, 4) };
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        row.Children.Add(new System.Windows.Shapes.Ellipse
+        var head = new StackPanel { Orientation = Orientation.Horizontal };
+        head.Children.Add(new System.Windows.Shapes.Ellipse
         {
             Width = 7,
             Height = 7,
@@ -154,9 +159,53 @@ public sealed class ChipPanel : Border
         var label = Caption(name, Theme.Panel.Text, 13);
         label.FontWeight = FontWeights.SemiBold;
         label.VerticalAlignment = VerticalAlignment.Center;
-        row.Children.Add(label);
+        head.Children.Add(label);
+
+        Grid.SetColumn(head, 0);
+        row.Children.Add(head);
+
+        // An expired ticket is one the server no longer counts, so it is not drawn either.
+        if (resets.Available > 0 && !resets.Expired(now))
+        {
+            var tickets = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            for (var index = 0; index < resets.Available; index++)
+            {
+                tickets.Children.Add(new Image
+                {
+                    Source = ResetTicket.Value,
+                    // The asset is 16x10; drawing it at any other size only softens it.
+                    Width = 16,
+                    Height = 10,
+                    Margin = new Thickness(3, 0, 0, 0),
+                    ToolTip = resets.Describe(now)
+                });
+            }
+
+            Grid.SetColumn(tickets, 1);
+            row.Children.Add(tickets);
+        }
+
         return row;
     }
+
+    // The ticket comes out of the assembly's resources (see the csproj), so a pack URI, loaded
+    // once, frozen so it can be reused by every row.
+    private static readonly Lazy<BitmapImage> ResetTicket = new(() =>
+    {
+        var image = new BitmapImage();
+        image.BeginInit();
+        image.UriSource = new Uri("pack://application:,,,/Assets/reset-credit.png", UriKind.Absolute);
+        image.CacheOption = BitmapCacheOption.OnLoad;
+        image.EndInit();
+        image.Freeze();
+        return image;
+    });
 
     private static UIElement Metric(
         string label,

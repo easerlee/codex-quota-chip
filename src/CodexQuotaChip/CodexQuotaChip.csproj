@@ -8,7 +8,7 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>CodexQuotaChip</RootNamespace>
     <AssemblyName>CodexQuotaChip</AssemblyName>
-    <Version>0.2.1</Version>
+    <Version>0.2.2</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
@@ -19,5 +19,10 @@
     <Description>A compact taskbar overlay that shows the Codex quota left, plus a right-click panel with every account seen so far.</Description>
     <Authors>easerlee</Authors>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- 重置次数的票券图标：嵌进程序集，单文件发布也能用 -->
+    <Resource Include="Assets\reset-credit.png" />
+  </ItemGroup>
 
 </Project>

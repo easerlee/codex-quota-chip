@@ -315,7 +315,9 @@ public partial class MainWindow : Window
             reading.FiveHour?.RemainingPercent,
             reading.FiveHour?.ResetsAt,
             reading.Weekly?.RemainingPercent,
-            reading.Weekly?.ResetsAt));
+            reading.Weekly?.ResetsAt,
+            reading.Resets?.Available,
+            reading.Resets?.ExpiresAt));
 
         if (rollover.Any && _settings.NotifyOnReset)
         {

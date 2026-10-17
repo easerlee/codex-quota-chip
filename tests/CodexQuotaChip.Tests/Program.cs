@@ -11,6 +11,7 @@ var tests = new (string Name, Action Body)[]
     ("windows are classified by duration, not position", TestClassification),
     ("reading is turned into text", TestReadout),
     ("a reset is a reset time that moved forward", TestResetWatch),
+    ("reset credits come out of the same answer", TestResetCredits),
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
@@ -146,6 +147,49 @@ static void TestResetWatch()
         ResetWatch.Check(was, was, was, now).Describe(50, 8.0), "week wording");
     Equal("5 小时和周额度都已重置，额度已恢复",
         ResetWatch.Check(was, was, now, now).Describe(null, null), "both windows, no figures");
+}
+
+static void TestResetCredits()
+{
+    // The shape recorded from a live account/rateLimits/read: the reset section sits beside
+    // rateLimits, and the list carries credits that are no longer usable.
+    var reading = QuotaParser.Parse("""
+        {
+          "rateLimits": {
+            "primary":   { "usedPercent": 58, "windowDurationMins": 300,   "resetsAt": 1792275253 },
+            "secondary": { "usedPercent": 71, "windowDurationMins": 10080, "resetsAt": 1792768211 },
+            "planType": "plus"
+          },
+          "rateLimitResetCredits": {
+            "availableCount": 2,
+            "credits": [
+              { "status": "redeemed",  "expiresAt": 1790000000 },
+              { "status": "available", "expiresAt": 1795000000 },
+              { "status": "available", "expiresAt": 1794009383 },
+              { "status": "expired",   "expiresAt": 1780000000 }
+            ]
+          }
+        }
+        """);
+
+    Equal(true, reading.Ok, "the answer is still a good reading");
+    Equal(true, reading.Resets is not null, "the reset section is picked up");
+    Equal(2, reading.Resets!.Available, "the server's own available count is used as-is");
+    Equal(true, (long?)1794009383L == reading.Resets.ExpiresAt, "the soonest available expiry wins, redeemed and expired ones do not count");
+
+    // No section: an account or build without the feature, which is not an error.
+    var bare = QuotaParser.Parse("""{ "rateLimits": { "primary": { "usedPercent": 0, "windowDurationMins": 300 } } }""");
+    Equal(true, bare.Resets is null, "no section, no tickets");
+    Equal(true, bare.Ok, "and that is not an error either");
+
+    // The wording and the expiry rule behind the icon.
+    var expiry = new DateTimeOffset(2026, 11, 6, 9, 0, 0, TimeSpan.FromHours(8)).ToUnixTimeSeconds();
+    var one = new ResetCredits(1, expiry);
+    Equal("1 次额度重置可用（最近 2026-11-06 到期）", one.Describe(DateTimeOffset.FromUnixTimeSeconds(expiry).AddDays(-1)), "one ticket, with the date it expires");
+    Equal("3 次额度重置可用", new ResetCredits(3, null).Describe(DateTimeOffset.Now), "several tickets, no expiry to mention");
+    Equal(false, one.Expired(DateTimeOffset.FromUnixTimeSeconds(expiry).AddSeconds(-1)), "alive a second before");
+    Equal(true, one.Expired(DateTimeOffset.FromUnixTimeSeconds(expiry)), "gone at the expiry second");
+    Equal(false, new ResetCredits(1, null).Expired(DateTimeOffset.Now), "an expiry that is not known cannot have passed");
 }
 
 static void TestToastPayload()
