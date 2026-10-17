@@ -29,13 +29,16 @@ zip 里的 `uninstall.ps1 -Purge`，或手动删那个目录。
 
 ## 发布（维护者）
 
+**版本号停在 `0.2.x`**：只递增修订号（0.2.1、0.2.2、…），次版本号先不要动（这是维护者的决定，
+不是技术限制 —— 哪天要动，这条和下面的示例一起改）。
+
 发布由 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) 在 CI 里完成，
 用 **Trusted Publishing（OIDC）**，仓库和本机都不存 npm token：
 
-1. `..\build-publish.ps1 -Version X.Y.Z` 出新的 zip，记下它的 sha256
-2. 把本目录 `package.json` 的 `version` 和 `codexQuotaChip.sha256` 一起改成 X.Y.Z / 新哈希，
-   提交
-3. 建 GitHub Release `vX.Y.Z` 并上传 zip（先建 draft、传完资源再公开，免得 CI 抢跑）
+1. `..\build-publish.ps1 -Version 0.2.1` 出新的 zip，记下它的 sha256
+2. 把本目录 `package.json` 的 `version` 和 `codexQuotaChip.sha256` 一起改成 `0.2.1` / 新哈希，
+   并同步 `..\src\CodexQuotaChip\CodexQuotaChip.csproj` 的 `<Version>`，提交
+3. 建 GitHub Release `v0.2.1` 并上传 zip（先建 draft、传完资源再公开，免得 CI 抢跑）
 4. Release 一公开，tag 就有了，workflow 自动跑：校验 tag 与 version 一致、校验 Release 上的
    zip 哈希与 `package.json` 一致，然后 `npm publish --provenance`
 
