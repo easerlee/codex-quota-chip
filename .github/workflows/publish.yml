@@ -1,0 +1,99 @@
+# 推一个 v* tag → 自动发布到 npm（Trusted Publishing / OIDC，仓库里不存任何 token）
+#
+# 一次性配置（在 npm 网页上做一次，必须等包已经在 npm 上存在之后）：
+#   npmjs.com → Packages → codex-quota-chip → Settings → Trusted publishing
+#   → GitHub Actions：
+#       Organization or user = easerlee
+#       Repository           = codex-quota-chip
+#       Workflow filename    = publish.yml
+#       Environment name     = 留空
+#       Allowed actions      = 勾上 “npm publish”（npm stage publish 本来就允许）
+#
+# 配好之后的发版动作：改 npm/package.json 的 version + codexQuotaChip.sha256（对应该版本的
+# GitHub Release zip）→ git tag vX.Y.Z → git push origin vX.Y.Z，npm 那边不用再碰。
+#
+# 为什么发布前要校验两件事：这个 npm 包只是个“下载外壳”——install.js 按自己的 version 去
+# Release 找 CodexQuotaChip-<version>-win-x64.zip，并按 package.json 里钉死的 sha256 校验。
+# tag 与 version 不一致、或者 zip 不存在/哈希对不上，发出去的包就是装不上的废包。
+
+name: publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  # 想手动补发（或验证）时用：Actions → publish → Run workflow，填一个已存在的 tag
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 要发布的 tag（例如 v0.1.1）
+        required: true
+
+permissions:
+  contents: read
+  id-token: write # Trusted Publishing 靠它换 OIDC 身份，少了这条会被 npm 拒
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: npm
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
+      # Trusted Publishing 要求 npm CLI ≥ 11.5.1（Node 22 自带的是 10.x，所以要升级）
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - run: npm install -g npm@latest
+
+      - name: 语法检查
+        run: |
+          set -euo pipefail
+          node --check bin/codex-quota-chip.js
+          node --check scripts/install.js
+
+      - name: 校验 tag 与 package.json 版本一致
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.ref }}"
+            TAG="${TAG#v}"
+          fi
+          PKG="$(node -p "require('./package.json').version")"
+          echo "tag=$TAG  package.json=$PKG"
+          [ "$TAG" = "$PKG" ] || {
+            echo "::error::tag v$TAG 与 package.json 的 $PKG 不一致，先对齐再发"
+            exit 1
+          }
+
+      - name: 校验 Release 上有对应的 zip，且与钉死的 sha256 一致
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          EXPECTED="$(node -p "require('./package.json').codexQuotaChip.sha256")"
+          ASSET="CodexQuotaChip-${VERSION}-win-x64.zip"
+          URL="https://github.com/${{ github.repository }}/releases/download/v${VERSION}/${ASSET}"
+          echo "asset: $URL"
+          curl -fsSL -o "/tmp/${ASSET}" "${URL}"
+          ACTUAL="$(sha256sum "/tmp/${ASSET}" | cut -d' ' -f1)"
+          echo "expected=$EXPECTED"
+          echo "actual  =$ACTUAL"
+          [ "$ACTUAL" = "$EXPECTED" ] || {
+            echo "::error::zip 的 sha256 与 package.json 里的不一致（换过包就要更新它）"
+            exit 1
+          }
+
+      - name: 发布
+        run: npm publish --provenance
+        # 故意不设 NODE_AUTH_TOKEN：Trusted Publishing 用 OIDC 换一次性凭证。
+        # provenance 在 OIDC 下本来就会自动生成，这里显式写上只是让它更明确。
