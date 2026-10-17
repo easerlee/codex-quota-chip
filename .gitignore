@@ -11,3 +11,5 @@ accounts.json
 *.tgz
 npm/vendor/
 *.log
+# 本地 .NET SDK（714 MB，只在需要编译时下回来，不进仓库）
+.tools/
