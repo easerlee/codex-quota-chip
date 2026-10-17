@@ -93,7 +93,20 @@ jobs:
             exit 1
           }
 
+      - name: 该版本已经在 npm 上就跳过
+        id: published
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./package.json').version")"
+          if npm view "codex-quota-chip@${VERSION}" version >/dev/null 2>&1; then
+            echo "npm 上已经有 ${VERSION}，跳过发布"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: 发布
+        if: steps.published.outputs.skip != 'true'
         run: npm publish --provenance
         # 故意不设 NODE_AUTH_TOKEN：Trusted Publishing 用 OIDC 换一次性凭证。
         # provenance 在 OIDC 下本来就会自动生成，这里显式写上只是让它更明确。
