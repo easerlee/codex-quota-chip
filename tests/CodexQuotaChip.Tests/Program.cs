@@ -12,6 +12,7 @@ var tests = new (string Name, Action Body)[]
     ("reading is turned into text", TestReadout),
     ("a reset is nearly a whole window, not drift", TestResetWatch),
     ("reset credits come out of the same answer", TestResetCredits),
+    ("a refilled window shows a full bar", TestBarPercent),
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
@@ -431,6 +432,22 @@ static void TestAccountFile()
     {
         Directory.Delete(directory, recursive: true);
     }
+}
+
+static void TestBarPercent()
+{
+    var now = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+
+    // The reset time has passed: the window refilled, so the bar is full even though the stored
+    // reading is whatever it was before the reset.
+    Equal(100.0, ChipPanel.BarPercent(3.0, 1_799_999_999, now), "a passed reset time reads as a full bar");
+
+    // Being full is the other way a window is spent: never used is not the same as empty.
+    Equal(100.0, ChipPanel.BarPercent(100.0, 1_800_000_600, now), "a full window reads as a full bar");
+
+    // Everything else is the reading itself, and no reading at all is an empty bar.
+    Equal(42.0, ChipPanel.BarPercent(42.0, 1_800_000_600, now), "a live window keeps its reading");
+    Equal(0.0, ChipPanel.BarPercent(null, null, now), "no reading is an empty bar");
 }
 
 static void Equal<T>(T expected, T actual, string what)

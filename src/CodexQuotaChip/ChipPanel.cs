@@ -231,8 +231,9 @@ public sealed class ChipPanel : Border
         Grid.SetColumn(labelText, 0);
         row.Children.Add(labelText);
 
-        // A spent window has no chart to draw: the bar stays empty and the row reads 已重置.
-        var bar = Bar(spent ? 0 : remaining ?? 0, color);
+        // A spent window has just refilled, so its bar is full: "已重置" is a label, not an empty
+        // chart. A full window is a good window, so it keeps the full-window green.
+        var bar = Bar(BarPercent(remaining, resetsAt, now), spent ? Theme.Panel.Ok : color);
         Grid.SetColumn(bar, 1);
         row.Children.Add(bar);
 
@@ -262,6 +263,12 @@ public sealed class ChipPanel : Border
 
     private static string ResetText(double? remaining, long? resetsAt, DateTimeOffset now, bool weekly) =>
         Readout.Spent(remaining, resetsAt, now) ? string.Empty : Readout.When(remaining, resetsAt, now, weekly);
+
+    // How full a metric row's bar is. A window that has just refilled is full again, so a reset
+    // reads as a full bar rather than as an empty chart - the overlay draws the same thing from
+    // the reading itself, and this is what keeps the panel's two rows agreeing with it.
+    public static double BarPercent(double? remaining, long? resetsAt, DateTimeOffset now) =>
+        Readout.Spent(remaining, resetsAt, now) ? 100.0 : Math.Clamp(remaining ?? 0.0, 0.0, 100.0);
 
     // The widest text this panel will show in a column, so the column hugs its content instead
     // of leaving a gap. The same picker feeds the renderer, so the two cannot disagree.
