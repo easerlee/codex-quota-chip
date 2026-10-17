@@ -137,8 +137,12 @@ CodexQuotaChip.exe --notify-test # 立刻弹一条测试通知（不用等真的
 ```powershell
 dotnet build .\src\CodexQuotaChip\CodexQuotaChip.csproj -c Release
 dotnet run   --project .\tests\CodexQuotaChip.Tests          # 自检
+pwsh -File .\tools\make-icon.ps1                             # 重新生成 app.ico
 pwsh -File .\build-publish.ps1                               # 出 publish\ 下的 zip
 ```
+
+图标不是丢一个二进制在仓库里就算完：`tools/make-icon.ps1` 用深色圆角方块加两条额度条画出来
+（含 16/24/32/48/64/128/256 七个尺寸），要改样式就改脚本再跑一遍。
 
 自检覆盖的都是有规则可讲的部分：解析与窗口分类、读数格式化、账号排序、浮窗停靠、
 额度条几何、点外关闭规则、设置文件的容错、codex.exe 路径失效后重解析、账号记录文件。

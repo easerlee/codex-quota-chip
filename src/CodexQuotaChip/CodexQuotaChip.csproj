@@ -8,10 +8,12 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <RootNamespace>CodexQuotaChip</RootNamespace>
     <AssemblyName>CodexQuotaChip</AssemblyName>
-    <Version>0.2.0</Version>
+    <Version>0.2.1</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- 由 tools/make-icon.ps1 生成：深色圆角方块 + 两条额度条 -->
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <Product>Codex Quota Chip</Product>
     <Description>A compact taskbar overlay that shows the Codex quota left, plus a right-click panel with every account seen so far.</Description>
