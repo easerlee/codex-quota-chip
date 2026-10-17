@@ -29,11 +29,18 @@ zip 里的 `uninstall.ps1 -Purge`，或手动删那个目录。
 
 ## 发布（维护者）
 
-`package.json` 的 `version` 必须和 GitHub Release 的 tag（`v<version>`）一致，`sha256`
-必须是该 Release 上 zip 的哈希，否则安装会被自己的校验拦下：
+发布由 [`.github/workflows/publish.yml`](../.github/workflows/publish.yml) 在 CI 里完成，
+用 **Trusted Publishing（OIDC）**，仓库和本机都不存 npm token：
 
-```powershell
-npm pack                       # 本地打 tarball，可先 --prefix 装到临时目录验证
-npm login
-npm publish
-```
+1. `..\build-publish.ps1 -Version X.Y.Z` 出新的 zip，记下它的 sha256
+2. 把本目录 `package.json` 的 `version` 和 `codexQuotaChip.sha256` 一起改成 X.Y.Z / 新哈希，
+   提交
+3. 建 GitHub Release `vX.Y.Z` 并上传 zip（先建 draft、传完资源再公开，免得 CI 抢跑）
+4. Release 一公开，tag 就有了，workflow 自动跑：校验 tag 与 version 一致、校验 Release 上的
+   zip 哈希与 `package.json` 一致，然后 `npm publish --provenance`
+
+`version` 与 tag 不一致、或 zip 哈希对不上时，workflow **会拒绝发布** —— 因为安装脚本就是按
+自己的 version 去 Release 拼下载地址的，发出去也装不上。
+
+手动补发：Actions → publish → Run workflow，填一个已存在的 tag。
+绑定关系只能由维护者在 npmjs.com 的包设置里维护（包页 → Settings → Trusted publishing）。
