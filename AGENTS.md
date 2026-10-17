@@ -28,3 +28,11 @@ pwsh -File .\tools\cwd-holders.ps1 -Prefix 'E:\dsh'
 除 `DeepSeek Harness.exe` 和当次 `pwsh` 外，不该有别的进程。
 
 （更完整的说明在 `~/.dsh/AGENTS.md` 的「从工作区启动的进程会挡住 DSH 自更新」一节。）
+
+## 构建流程里不要启动 GUI
+
+改完一版，我该做的到此为止：编译、打包、`install.ps1 -Target 'D:\Program Files\CodexQuotaChip'`、
+用 `--check` / `--once`（无窗口、即退）验证，然后**写在回复里**。
+
+**不要**顺手 `Start-Process` 把界面启起来 —— 启动是"用"，由用户决定。他机器上这个程序要不要跑、
+什么时候跑，不是构建流程的一部分。要看界面/截图/验证通知，先问。
