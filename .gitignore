@@ -1,9 +1,11 @@
-/bin/
-/obj/
-/publish/
+# 构建产物（任意层级）；npm 包的 bin/ 必须保留，否则发出去的包没有命令
+bin/
+obj/
+!npm/bin/
+publish/
 *.user
 *.suo
-/logs/
+logs/
 settings.json
 accounts.json
 *.tgz
