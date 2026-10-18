@@ -2,33 +2,39 @@ namespace CodexQuotaChip;
 
 // The overlay is drawn straight onto the taskbar, so its colours follow the taskbar's own
 // light/dark setting; the right-click panel is always dark and has its own fixed palette.
+//
+// The overlay can also put the panel's dark plate behind itself. Then the chip is dark whatever
+// the taskbar is, which is why every overlay colour is asked for with the plate flag: near-black
+// text on a near-black plate is exactly the mistake that keeps from happening.
 public static class Theme
 {
     public static bool LightTaskbar { get; } = ReadLightTaskbar();
 
-    public static Color Text => Hex(LightTaskbar ? "#1B2027" : "#F4F6F8");
+    private static bool Dark(bool plate) => plate || !LightTaskbar;
 
-    public static Color Track => Hex(LightTaskbar ? "#33000000" : "#6A56616C");
+    public static Color Text(bool plate) => Hex(Dark(plate) ? "#F4F6F8" : "#1B2027");
 
-    public static Color Ok => Hex(LightTaskbar ? "#0F8A69" : "#2DD4A8");
+    public static Color Track(bool plate) => Hex(Dark(plate) ? "#6A56616C" : "#33000000");
 
-    public static Color Warn => Hex(LightTaskbar ? "#A45A00" : "#FFC857");
+    public static Color Ok(bool plate) => Hex(Dark(plate) ? "#2DD4A8" : "#0F8A69");
 
-    public static Color Fail => Hex(LightTaskbar ? "#C62A45" : "#FF6B81");
+    public static Color Warn(bool plate) => Hex(Dark(plate) ? "#FFC857" : "#A45A00");
 
-    public static Color Idle => Hex(LightTaskbar ? "#5B6672" : "#8794A2");
+    public static Color Fail(bool plate) => Hex(Dark(plate) ? "#FF6B81" : "#C62A45");
+
+    public static Color Idle(bool plate) => Hex(Dark(plate) ? "#8794A2" : "#5B6672");
 
     public static Color ForRemaining(double? remainingPercent, Settings settings)
     {
         if (!remainingPercent.HasValue)
         {
-            return Idle;
+            return Idle(settings.Plate);
         }
         if (remainingPercent.Value < settings.CriticalBelow)
         {
-            return Fail;
+            return Fail(settings.Plate);
         }
-        return remainingPercent.Value < settings.WarnBelow ? Warn : Ok;
+        return remainingPercent.Value < settings.WarnBelow ? Warn(settings.Plate) : Ok(settings.Plate);
     }
 
     public static Color Hex(string value) => (Color)ColorConverter.ConvertFromString(value);

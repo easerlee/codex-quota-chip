@@ -303,11 +303,13 @@ static void TestSettings()
         var defaults = SettingsFile.Load(path, log);
         Equal(60, defaults.RefreshSeconds, "default refresh interval");
         Equal(false, defaults.DisplayLeft, "the overlay starts on the tray side");
+        Equal(true, defaults.Plate, "the dark plate is on by default");
 
         File.WriteAllText(path, """{ "refresh_seconds": 900, "display_side": "left", "warn_below": 40, "critical_below": 20 }""");
         var loaded = SettingsFile.Load(path, log);
         Equal(900, loaded.RefreshSeconds, "loaded refresh interval");
         Equal(true, loaded.DisplayLeft, "loaded display side");
+        Equal(true, loaded.Plate, "a settings file from before the plate existed keeps it on");
 
         File.WriteAllText(path, """{ "refresh_seconds": 1, "display_side": "sideways" }""");
         var repaired = SettingsFile.Load(path, log);

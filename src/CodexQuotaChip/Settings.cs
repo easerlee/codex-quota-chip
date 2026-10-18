@@ -28,6 +28,11 @@ public sealed class Settings
     [JsonPropertyName("notify_on_reset")]
     public bool NotifyOnReset { get; set; } = true;
 
+    // Draw a dark rounded plate behind the overlay, in the panel's own colour. Off leaves the chip
+    // sitting straight on the taskbar the way it did before this existed.
+    [JsonPropertyName("plate")]
+    public bool Plate { get; set; } = true;
+
     [JsonIgnore]
     public bool DisplayLeft => string.Equals(DisplaySide, "left", StringComparison.OrdinalIgnoreCase);
 
@@ -37,7 +42,8 @@ public sealed class Settings
         DisplaySide = DisplaySide,
         WarnBelow = WarnBelow,
         CriticalBelow = CriticalBelow,
-        NotifyOnReset = NotifyOnReset
+        NotifyOnReset = NotifyOnReset,
+        Plate = Plate
     };
 
     public void Normalize()

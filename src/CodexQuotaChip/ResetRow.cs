@@ -9,6 +9,7 @@ public sealed class ResetRow : FrameworkElement
 
     private string _text = string.Empty;
     private double _size;
+    private bool _plate;
 
     public ResetRow()
     {
@@ -17,10 +18,11 @@ public sealed class ResetRow : FrameworkElement
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Ideal);
     }
 
-    public void Show(string text, double size)
+    public void Show(string text, double size, bool plate)
     {
         _text = text;
         _size = size;
+        _plate = plate;
         InvalidateVisual();
     }
 
@@ -33,7 +35,7 @@ public sealed class ResetRow : FrameworkElement
         }
 
         var text = TextDrawing.Format(
-            _text, _size, FontWeights.Normal, new SolidColorBrush(Theme.Text), VisualTreeHelper.GetDpi(this).PixelsPerDip);
+            _text, _size, FontWeights.Normal, new SolidColorBrush(Theme.Text(_plate)), VisualTreeHelper.GetDpi(this).PixelsPerDip);
         text.MaxTextWidth = Math.Max(1.0, ActualWidth - TextLeft - StatusLightRoom);
         // One line, always: the strip is only a third of the taskbar, and a wrapped second line
         // would be drawn over the rows below. Too narrow means an ellipsis, never a second line.

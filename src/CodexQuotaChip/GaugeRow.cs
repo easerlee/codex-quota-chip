@@ -35,7 +35,7 @@ public sealed class GaugeRow : FrameworkElement
         var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
         var label = TextDrawing.Format(_label, Readout.TextSize(height), FontWeights.Normal,
-            new SolidColorBrush(Theme.Text), dpi);
+            new SolidColorBrush(Theme.Text(_settings.Plate)), dpi);
         label.MaxLineCount = 1;
         TextDrawing.DrawInk(dc, label, LabelLeft, height);
 
@@ -53,7 +53,7 @@ public sealed class GaugeRow : FrameworkElement
         const double Radius = 3.0;
 
         dc.DrawRoundedRectangle(
-            new SolidColorBrush(Theme.Track), null, new Rect(left, barTop, barWidth, barHeight), Radius, Radius);
+            new SolidColorBrush(Theme.Track(_settings.Plate)), null, new Rect(left, barTop, barWidth, barHeight), Radius, Radius);
 
         if (!_remaining.HasValue)
         {

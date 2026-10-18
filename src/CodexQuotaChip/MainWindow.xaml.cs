@@ -19,6 +19,7 @@ public partial class MainWindow : Window
     private readonly QuotaClient _client;
     private readonly AccountFile _accounts;
 
+    private readonly Border _plate;
     private readonly GaugeRow _fiveHour;
     private readonly GaugeRow _week;
     private readonly ResetRow _resetLine;
@@ -62,6 +63,18 @@ public partial class MainWindow : Window
             Root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         }
 
+        // Behind everything: the panel's own dark plate, with a tighter radius than the panel's
+        // because the chip is only this tall. The panel's switch shows and hides it.
+        _plate = new Border
+        {
+            CornerRadius = new CornerRadius(3),
+            Background = new SolidColorBrush(Theme.Panel.Background),
+            IsHitTestVisible = false
+        };
+        Grid.SetRowSpan(_plate, 3);
+        Root.Children.Add(_plate);
+        ApplyPlate();
+
         _fiveHour = AddGauge("5H", 0);
         _week = AddGauge("WK", 1);
 
@@ -77,7 +90,7 @@ public partial class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 2, 0),
-            Background = new SolidColorBrush(Theme.Idle),
+            Background = new SolidColorBrush(Theme.Idle(_settings.Plate)),
             IsHitTestVisible = false
         };
         Grid.SetRow(_statusLight, 2);
@@ -119,7 +132,7 @@ public partial class MainWindow : Window
 
     private void BuildPanel()
     {
-        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, SetRefreshSeconds, SetDisplaySide, Exit);
+        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, Exit);
         _popup.PlacementTarget = this;
         _popup.Placement = PlacementMode.Custom;
         _popup.StaysOpen = false;
@@ -339,7 +352,8 @@ public partial class MainWindow : Window
         _resetLine.Show(
             $"{Readout.When(_reading?.FiveHour?.RemainingPercent, _reading?.FiveHour?.ResetsAt, now, weekly: false)} / " +
             $"{Readout.When(_reading?.Weekly?.RemainingPercent, _reading?.Weekly?.ResetsAt, now, weekly: true)}",
-            Readout.TextSize(rowHeight));
+            Readout.TextSize(rowHeight),
+            _settings.Plate);
 
         _statusLight.Background = new SolidColorBrush(StatusColor());
         UpdateTitle();
@@ -349,20 +363,20 @@ public partial class MainWindow : Window
     {
         if (_readInFlight || IsStale())
         {
-            return Theme.Warn;
+            return Theme.Warn(_settings.Plate);
         }
 
         if (_reading is null)
         {
-            return Theme.Idle;
+            return Theme.Idle(_settings.Plate);
         }
 
         if (_lastError is not null && _lastSuccessAt.HasValue)
         {
-            return Theme.Warn;
+            return Theme.Warn(_settings.Plate);
         }
 
-        return _reading.Error is not null && !_lastSuccessAt.HasValue ? Theme.Fail : Theme.Ok;
+        return _reading.Error is not null && !_lastSuccessAt.HasValue ? Theme.Fail(_settings.Plate) : Theme.Ok(_settings.Plate);
     }
 
     private bool IsStale()
@@ -426,6 +440,19 @@ public partial class MainWindow : Window
         SettingsFile.Save(_paths.Settings, _settings, _log);
         return _settings.NotifyOnReset;
     }
+
+    // Same deal, and the overlay follows on the spot instead of waiting for a restart.
+    private bool TogglePlate()
+    {
+        _settings.Plate = !_settings.Plate;
+        _settings.Normalize();
+        SettingsFile.Save(_paths.Settings, _settings, _log);
+        ApplyPlate();
+        return _settings.Plate;
+    }
+
+    private void ApplyPlate() =>
+        _plate.Visibility = _settings.Plate ? Visibility.Visible : Visibility.Collapsed;
 
     private void Exit()
     {

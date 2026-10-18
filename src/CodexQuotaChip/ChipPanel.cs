@@ -31,6 +31,7 @@ public sealed class ChipPanel : Border
     private readonly Action _refresh;
     private readonly Func<bool> _toggleAutostart;
     private readonly Func<bool> _toggleNotifications;
+    private readonly Func<bool> _togglePlate;
     private readonly Action<int> _setRefreshSeconds;
     private readonly Action<string> _setDisplaySide;
     private readonly Action _exit;
@@ -39,6 +40,7 @@ public sealed class ChipPanel : Border
         Action refresh,
         Func<bool> toggleAutostart,
         Func<bool> toggleNotifications,
+        Func<bool> togglePlate,
         Action<int> setRefreshSeconds,
         Action<string> setDisplaySide,
         Action exit)
@@ -46,6 +48,7 @@ public sealed class ChipPanel : Border
         _refresh = refresh;
         _toggleAutostart = toggleAutostart;
         _toggleNotifications = toggleNotifications;
+        _togglePlate = togglePlate;
         _setRefreshSeconds = setRefreshSeconds;
         _setDisplaySide = setDisplaySide;
         _exit = exit;
@@ -109,6 +112,8 @@ public sealed class ChipPanel : Border
         _rows.Children.Add(Divider());
         _rows.Children.Add(SettingRow("显示位置", new Segmented(
             ["左", "右"], settings.DisplayLeft ? 0 : 1, index => _setDisplaySide(index == 0 ? "left" : "right"))));
+        // The plate the overlay draws under itself: same idea as this panel's own background.
+        _rows.Children.Add(SwitchRow("黑色底图", settings.Plate, _togglePlate));
         _rows.Children.Add(AutostartRow(autostart));
         _rows.Children.Add(SwitchRow("额度重置时通知", settings.NotifyOnReset, _toggleNotifications));
         _rows.Children.Add(Divider());
