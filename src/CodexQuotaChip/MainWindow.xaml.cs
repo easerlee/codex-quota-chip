@@ -460,7 +460,7 @@ public partial class MainWindow : Window
                 else
                 {
                     var what = five && week ? "5 小时和周额度已恢复" : five ? "5 小时额度已恢复" : "周额度已恢复";
-                    _notifier?.Show($"「{label}」{what}", "这个账号现在没在登录，按它最后一次读数里的重置时间推算");
+                    _notifier?.Show($"「{label}」{what}", "该账号未登录，以最后一次刷新数据推算。");
                 }
 
                 _log.Info($"quota refill notified (account={label}, live={live}, 5h={five}, week={week})");

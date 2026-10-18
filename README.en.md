@@ -40,17 +40,23 @@ reads `已重置`, with its bar drawn full green.
 
 ## What it does
 
-- One glance at how much of the **logged-in account's** 5-hour and weekly window is left, and when each refills.
-- Lives on the taskbar: no window, no Alt+Tab entry, never takes focus, one instance only.
-- The right-click panel lists the last values read for **every account** this machine has used, and marks
-  which one is logged in now.
+**The two things it is for:**
+
+1. **The logged-in account's quota, live** - a strip parked on the taskbar: how much of the 5-hour and the
+   weekly window is left and when each refills, read every 60 seconds by default and re-read on a left click.
+2. **Every account's quota, in one place** - the right-click panel lists the last values read for each
+   account this machine has used, and marks which one is logged in now.
+
+**Everything else**, most important first:
+
+- **Refill notifications**: a Windows notification when a quota window refills - it lands in the Action
+  Center, honours Focus Assist, is judged separately for the 5-hour and the weekly window, and never fires
+  twice for the same refill. **Accounts that are not signed in are announced too**: nothing is consuming
+  their quota, so once the reset time they last reported goes by, the window is full again, and the small
+  print says 该账号未登录，以最后一次刷新数据推算。 ("not signed in - worked out from the last refresh").
 - Shows how many **manual resets** an account has left, as ticket icons (with each one's expiry date).
-- **A Windows notification when a quota window refills**: it lands in the Action Center, honours Focus
-  Assist, is judged separately for the 5-hour and the weekly window, never fires twice for the same refill,
-  and can be switched off.
-- **Accounts that are not signed in are announced too**: nothing is consuming their quota, so once the
-  reset time they last reported goes by, the window is full again. The notification says it was worked
-  out from that last reading, because the app genuinely cannot read them.
+- Lives on the taskbar: no window, no Alt+Tab entry, never takes focus, one instance only, and it steps
+  aside while a fullscreen app is in front.
 - An optional **dark rounded plate** behind the strip; the palette follows the taskbar, or stays dark.
 - The switches you would expect: read interval, docking side (left of the tray / the taskbar's far end),
   start with Windows, the refill notification, the plate - all in the right-click panel, effective
