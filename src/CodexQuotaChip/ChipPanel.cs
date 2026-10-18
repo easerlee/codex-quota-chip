@@ -96,6 +96,7 @@ public sealed class ChipPanel : Border
             _rows.Children.Add(AccountHead(
                 AccountIdentity.Label(account.Email, account.Id),
                 AccountOrder.IsCurrent(account, currentId),
+                Freshness.IsLive(account.LastSeenAt, now, settings.RefreshSeconds),
                 new ResetCredits(account.ResetCredits ?? 0, account.ResetCreditsExpireAt),
                 now));
             _rows.Children.Add(Metric("5H", account.FiveHourLeft, account.FiveHourResetsAt, now, settings, weekly: false, valueWidth, resetWidth));
@@ -142,7 +143,7 @@ public sealed class ChipPanel : Border
     // The account name, with that account's reset tickets sitting on the right-hand edge of the
     // row - the same edge the metrics' reset column ends on. A right-aligned strip grows leftwards,
     // so a second ticket lands to the left of the first.
-    private static UIElement AccountHead(string name, bool current, ResetCredits resets, DateTimeOffset now)
+    private static UIElement AccountHead(string name, bool current, bool live, ResetCredits resets, DateTimeOffset now)
     {
         var row = new Grid { Margin = new Thickness(RowInset, 6, RowInset, 4) };
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -155,9 +156,10 @@ public sealed class ChipPanel : Border
             Height = 7,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(0, 0, 8, 0),
-            // Same reading as the overlay's status light: green means this is the live account,
-            // grey means the reading is frozen because the account is no longer logged in.
-            Fill = new SolidColorBrush(current ? Theme.Panel.Ok : Theme.Panel.Idle)
+            // The link, not the login: green while the app is still hearing from this account,
+            // grey once its reading has gone quiet - which is also how a revoked token shows up.
+            // Which account is logged in is the marker's job, further right on this row.
+            Fill = new SolidColorBrush(live ? Theme.Panel.Ok : Theme.Panel.Idle)
         });
 
         var label = Caption(name, Theme.Panel.Text, 13);

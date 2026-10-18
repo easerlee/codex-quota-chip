@@ -372,9 +372,7 @@ public partial class MainWindow : Window
             return false;
         }
 
-        var age = DateTimeOffset.Now - _lastSuccessAt.Value;
-        var interval = _settings.RefreshSeconds;
-        return age.TotalSeconds > Math.Max(interval * 2.0, interval + 5.0);
+        return !Freshness.IsLive(_lastSuccessAt.Value, DateTimeOffset.Now, _settings.RefreshSeconds);
     }
 
     private void UpdateTitle()

@@ -13,6 +13,7 @@ var tests = new (string Name, Action Body)[]
     ("a reset is nearly a whole window, not drift", TestResetWatch),
     ("reset credits come out of the same answer", TestResetCredits),
     ("a refilled window shows a full bar", TestBarPercent),
+    ("the light follows the link, not the login", TestFreshness),
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
@@ -448,6 +449,22 @@ static void TestBarPercent()
     // Everything else is the reading itself, and no reading at all is an empty bar.
     Equal(42.0, ChipPanel.BarPercent(42.0, 1_800_000_600, now), "a live window keeps its reading");
     Equal(0.0, ChipPanel.BarPercent(null, null, now), "no reading is an empty bar");
+}
+
+static void TestFreshness()
+{
+    var now = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+
+    Equal(120.0, Freshness.Window(60).TotalSeconds, "a one-minute refresh is quiet after two periods");
+    Equal(1800.0, Freshness.Window(900).TotalSeconds, "a slow one gets two periods");
+    Equal(7.0, Freshness.Window(2).TotalSeconds, "a tiny period still gets a few seconds of slack");
+
+    Equal(true, Freshness.IsLive(now.AddSeconds(-10), now, 60), "a reading from a moment ago is live");
+    Equal(true, Freshness.IsLive(now.AddSeconds(-120), now, 60), "the window itself still counts as live");
+    Equal(false, Freshness.IsLive(now.AddSeconds(-121), now, 60), "a second past it is not live");
+
+    Equal(true, Freshness.IsLive(now.AddMinutes(-20), now, 900), "a slow refresh stays live longer");
+    Equal(false, Freshness.IsLive(now.AddMinutes(-31), now, 900), "and gives up after its own window");
 }
 
 static void Equal<T>(T expected, T actual, string what)
