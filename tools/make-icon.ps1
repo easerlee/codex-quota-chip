@@ -6,7 +6,10 @@
 # 用法：pwsh -File tools/make-icon.ps1
 param(
     [string]$Output = (Join-Path $PSScriptRoot '..\src\CodexQuotaChip\app.ico'),
-    [int[]]$Sizes = @(16, 24, 32, 48, 64, 128, 256)
+    [int[]]$Sizes = @(16, 24, 32, 48, 64, 128, 256),
+    # README 的头图：同一份画法，单独出一张 PNG（GitHub 渲染 .ico 不可靠）
+    [string]$Png = (Join-Path $PSScriptRoot '..\docs\icon.png'),
+    [int]$PngSize = 256
 )
 
 Add-Type -AssemblyName System.Drawing
@@ -112,3 +115,12 @@ $writer.Dispose()
 $out.Dispose()
 
 Write-Host ("wrote {0} ({1} bytes, sizes: {2})" -f $Output, (Get-Item $Output).Length, ($Sizes -join ', '))
+
+if ($Png) {
+    $bmp = New-IconBitmap $PngSize
+    $pngDirectory = Split-Path $Png -Parent
+    if (-not (Test-Path $pngDirectory)) { New-Item -ItemType Directory -Force -Path $pngDirectory | Out-Null }
+    $bmp.Save($Png, [System.Drawing.Imaging.ImageFormat]::Png)
+    $bmp.Dispose()
+    Write-Host ("wrote {0} ({1} bytes, {2}px)" -f $Png, (Get-Item $Png).Length, $PngSize)
+}

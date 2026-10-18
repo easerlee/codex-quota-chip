@@ -6,11 +6,13 @@ A small Codex quota strip that lives on the Windows taskbar: one glance for what
 
 **English** | [简体中文](README.md) ・ [Changelog](CHANGELOG.md)
 
-![The taskbar strip](docs/chip.png)
+![Codex Quota Chip](docs/icon.png)
 
 </div>
 
 ## What it looks like
+
+![The taskbar strip](docs/chip.png)
 
 A small block on the taskbar, three lines: the 5-hour bar, the weekly bar, and "5H reset clock / weekly
 countdown + status light". The bars change colour with what is left (green / amber / red), and the small
@@ -84,12 +86,17 @@ has left; the panel's tickets come from it. Each read starts a process and ends 
 
 ### How a refill is recognised
 
-Not by the local clock, and with no extra state kept: when a window refills the server pushes `resetsAt`
-**forward by nearly a whole window** (about five hours for the 5-hour window, about seven days for the
-weekly one), so "the reset time jumped forward by at least 70% of the window" is what counts as a refill.
-That stays right across restarts, sleep and the app not running at all, and the same refill is never
-announced twice. A window with **no** reset time in the previous record is one that has just started being
-used: not a refill, no notification.
+Two cases get a word:
+
+- **The account being read**: not by the local clock, and with no extra state kept - when a window refills
+  the server pushes `resetsAt` **forward by nearly a whole window** (about five hours for the 5-hour window,
+  about seven days for the weekly one), so "the reset time jumped forward by at least 70% of the window" is
+  what counts as a refill. That stays right across restarts, sleep and the app not running at all, and the
+  same refill is never announced twice. A window with **no** reset time in the previous record is one that
+  has just started being used: not a refill, no notification.
+- **An account that is not being read**: nothing is consuming its quota, so once the reset time in its last
+  reading goes by, the window is full again - announced once, with the small print saying it was worked out
+  from that last reading. Reporting it marks the record full and drops its reset time, so it cannot repeat.
 
 **Why the threshold has to be that high**: the server slides the end of the weekly window forward a little
 as you use it (minutes at a time). 0.2.2 started out calling any forward move a refill, so every single read
@@ -97,9 +104,12 @@ qualified - a false notification every two or three minutes. 0.2.3 judges by win
 amount of drift reaches 70%.
 
 Notifications go through system toasts (they land in the Action Center and honour Focus Assist / do not
-disturb). On its first run the app registers an app id for itself under
-`HKCU\Software\Classes\AppUserModelId\easerlee.CodexQuotaChip` - no Start Menu shortcut and no installer
-needed. If the system has no toast interface it falls back to a notification-area balloon.
+disturb). The app registers an app id for itself under
+`HKCU\Software\Classes\AppUserModelId\easerlee.CodexQuotaChip`, and makes the **process** answer to that same
+app id - an unpackaged program that skips the second half gets its toast taken and then quietly dropped
+(that is what 0.2.13 fixed). No Start Menu shortcut and no installer are needed. After sending, the app
+checks the system's own history to confirm the toast arrived; if it did not, or the system has no toast
+interface, it falls back to a notification-area balloon.
 
 ## Installing
 
@@ -151,17 +161,19 @@ Needs the .NET 8 SDK:
 ```powershell
 dotnet build .\src\CodexQuotaChip\CodexQuotaChip.csproj -c Release
 dotnet run   --project .\tests\CodexQuotaChip.Tests          # self-tests
-pwsh -File .\tools\make-icon.ps1                             # regenerate app.ico
-pwsh -File .\build-publish.ps1 -Version 0.2.12               # zip under publish\
+pwsh -File .\tools\make-icon.ps1                             # regenerate app.ico and docs\icon.png
+pwsh -File .\build-publish.ps1 -Version 0.2.13               # zip under publish\
 ```
 
 The icon is not a binary dropped in the repository: `tools/make-icon.ps1` draws it - a dark rounded square
-with the two quota bars - at 16/24/32/48/64/128/256, so a new look is a script change and a rerun.
+with the two quota bars - at 16/24/32/48/64/128/256. The README's header image, `docs/icon.png`, comes out of
+the same script, so a new look is a script change and a rerun.
 
 The self-tests cover what has a rule worth stating: parsing and window classification, turning a reading
 into text, account ordering, where the strip parks, bar geometry, how the strip's width is measured, the
-full bar a refilled window gets, the freshness behind the link light, the click-outside rule, repairing the
-settings file, re-resolving codex.exe when it disappears, and the account record file.
+full bar a refilled window gets, the freshness behind the link light, a refill being reported only once,
+the click-outside rule, repairing the settings file, re-resolving codex.exe when it disappears, and the
+account record file.
 
 ## Known limits
 
