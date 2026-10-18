@@ -1,6 +1,6 @@
 {
   "name": "codex-quota-chip",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Windows 任务栏上的 Codex 额度浮窗：装上就有一条 5H/周额度条和右键账号面板",
   "license": "MIT",
   "author": "easerlee",
@@ -41,6 +41,6 @@
   ],
   "codexQuotaChip": {
     "_comment": "sha256 of CodexQuotaChip-<version>-win-x64.zip on the matching GitHub release. Bump it together with version, or the install refuses to run the download.",
-    "sha256": "e26d23cf16d1d201a81148d1a743ca34e7233898f7c5e9ebaf11cca42da455f4"
+    "sha256": "ab3edc8548865a89df9703d1b6529dd62a4e6c3ab4f711ca9d3eab2440b76415"
   }
 }
