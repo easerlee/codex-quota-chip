@@ -129,6 +129,11 @@ public static class Win32
     [DllImport("user32.dll")]
     public static extern short GetAsyncKeyState(int virtualKey);
 
+    // Name the process the same way it names its notifications. An unpackaged program has no app id
+    // of its own, and a toast whose sender can be named is one the shell is happy to keep.
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
+    public static extern int SetCurrentProcessExplicitAppUserModelID(string appId);
+
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out Point point);
 

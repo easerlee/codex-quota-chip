@@ -24,10 +24,80 @@ public sealed class Notifier : IDisposable
         _balloon = handle == IntPtr.Zero ? null : new Balloon(handle, log);
     }
 
-    public bool Show(string title, string text) =>
-        Toast(title, text) || (_balloon?.Show(title, text) ?? false);
+    public bool Show(string title, string text)
+    {
+        var tag = "r" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        if (!Toast(title, text, tag))
+        {
+            return _balloon?.Show(title, text) ?? false;
+        }
+
+        // The shell can take a toast and then quietly drop it: the same toast sent from a short-lived
+        // process reached the Action Center, sent from the running overlay it did not, and nothing
+        // came back to say so. So the toast is tagged and the shell's own history is asked, a moment
+        // later, whether it arrived - and when it did not, the balloon goes up instead. That check
+        // waits for the shell, so it runs off the UI thread.
+        _ = Task.Run(() =>
+        {
+            if (Delivered(tag))
+            {
+                return;
+            }
+
+            _log.Warn("the shell dropped the toast; a balloon was used instead");
+            _balloon?.Show(title, text);
+        });
+
+        return true;
+    }
 
     public void Dispose() => _balloon?.Dispose();
+
+    // Did that toast reach the Action Center? Polled for a couple of seconds because the shell files
+    // it asynchronously. A history that cannot be read counts as "it arrived": failing to check must
+    // never mean a second notification.
+    private bool Delivered(string tag)
+    {
+        for (var attempt = 0; attempt < 6; attempt++)
+        {
+            Thread.Sleep(400);
+            try
+            {
+                if (Windows.UI.Notifications.ToastNotificationManager.History
+                    .GetHistory(Aumid)
+                    .Any(toast => toast.Tag == tag))
+                {
+                    return true;
+                }
+            }
+            catch (Exception error)
+            {
+                _log.Warn($"cannot read the notification history: {error.Message}");
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool Toast(string title, string text, string tag)
+    {
+        try
+        {
+            Register();
+            var xml = new Windows.Data.Xml.Dom.XmlDocument();
+            xml.LoadXml(BuildXml(title, text));
+            Windows.UI.Notifications.ToastNotificationManager
+                .CreateToastNotifier(Aumid)
+                .Show(new Windows.UI.Notifications.ToastNotification(xml) { Tag = tag });
+            return true;
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"toast not shown, trying a balloon instead: {error.Message}");
+            return false;
+        }
+    }
 
     // Kept separate from the sending so the escaping - the one part of this that has a wrong
     // answer - can be checked without a shell.

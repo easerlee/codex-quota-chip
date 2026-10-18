@@ -16,6 +16,10 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Before any window exists: the app id the process answers to has to be the one its
+        // notifications are sent under.
+        Win32.SetCurrentProcessExplicitAppUserModelID(Notifier.Aumid);
+
         var paths = Paths.Discover(e.Args);
         _log = new Log(paths.LogPath);
         DispatcherUnhandledException += OnUnhandledException;
