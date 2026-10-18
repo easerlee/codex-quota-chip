@@ -10,60 +10,46 @@ A small Codex quota strip that lives on the Windows taskbar: one glance for what
 
 </div>
 
-## What it looks like
-
-![The taskbar strip](docs/chip.png)
-
-A small block on the taskbar, three lines: the 5-hour bar, the weekly bar, and "5H reset clock / weekly
-countdown + status light". The bars change colour with what is left (green / amber / red), and the small
-dot at the bottom right is the status light (fine / reading or the data has gone stale / nothing read yet /
-the read failed).
-
-By default it draws a dark rounded plate behind itself, the same colour as the right-click panel; switch it
-off and the content sits straight on the taskbar. The palette follows the taskbar's light/dark setting, and
-is the dark set while the plate is on.
-
-The width is not fixed: it is measured from the longest line the bottom row can ever show, and every pixel
-the rows do not need goes to the bars.
-
-The mouse: **left click refreshes, right click opens the panel, hovering shows the hint**. The strip steps
-aside while a fullscreen app is in front, and comes back afterwards.
-
-The right-click panel:
-
-![The right-click panel](docs/panel.png)
-
-One block per account this machine has used: the name (the logged-in one is marked `【当前】`), the tickets
-for how many manual resets it has left, and the two rows of numbers. The dot in front of a name says whether
-that account's data is still being refreshed - green while it is live, grey once it has stopped (an account
-that has been signed out, or the stretch when a token was revoked). Each account's clock and countdown are
-rendered from the time the server gave; a window that has just refilled, or whose reset time has passed,
-reads `已重置`, with its bar drawn full green.
-
 ## What it does
 
 **The two things it is for:**
 
 1. **The logged-in account's quota, live** - a strip parked on the taskbar: how much of the 5-hour and the
-   weekly window is left and when each refills, read every 60 seconds by default and re-read on a left click.
+   weekly window is left, and when each refills, at a glance;
 2. **Every account's quota, in one place** - the right-click panel lists the last values read for each
    account this machine has used, and marks which one is logged in now.
 
-**Everything else**, most important first:
+**Everything else**:
 
-- **Refill notifications**: a Windows notification when a quota window refills - it lands in the Action
-  Center, honours Focus Assist, is judged separately for the 5-hour and the weekly window, and never fires
-  twice for the same refill. **Accounts that are not signed in are announced too**: nothing is consuming
-  their quota, so once the reset time they last reported goes by, the window is full again, and the small
-  print says 该账号未登录，以最后一次刷新数据推算。 ("not signed in - worked out from the last refresh").
-- Shows how many **manual resets** an account has left, as ticket icons (with each one's expiry date).
-- Lives on the taskbar: no window, no Alt+Tab entry, never takes focus, one instance only, and it steps
-  aside while a fullscreen app is in front.
-- An optional **dark rounded plate** behind the strip; the palette follows the taskbar, or stays dark.
-- The switches you would expect: read interval, docking side (left of the tray / the taskbar's far end),
-  start with Windows, the refill notification, the plate - all in the right-click panel, effective
-  immediately, or edit the JSON settings file directly.
-- **Read-only, no credentials stored**: see below.
+- **Refill notifications**: a Windows notification when a quota window refills;
+- **Reset credits**: how many manual resets an account has left, as ticket icons (with each one's expiry);
+- **One instance**: lives on the taskbar, no window, no Alt+Tab entry, never takes focus;
+- **Read-only, no credentials stored**.
+
+## What it looks like
+
+![Plate on](docs/chip.png) &nbsp;&nbsp;&nbsp;&nbsp; ![Plate off](docs/chip-light.png)
+
+A small block on the taskbar, three lines: the 5-hour bar, the weekly bar, and "5H reset clock / weekly
+countdown + status light". The bars change colour with what is left (green / amber / red), and the small dot
+at the bottom right is the status light (fine / reading or the data has gone stale / nothing read yet / the
+read failed).
+
+The strip draws a dark rounded plate behind itself by default (left), or can leave it off and sit straight on
+the taskbar (right); the palette follows the taskbar's light/dark setting.
+
+The mouse: **left click refreshes, right click opens the panel**.
+
+The right-click panel:
+
+![The right-click panel](docs/panel.png)
+
+It shows each account's quota: the name (the logged-in one is marked `【当前】`), the tickets for how many
+manual resets it has left, and the two rows of numbers. The dot in front of a name says whether that
+account's data is still being refreshed - green while it is live, grey once it has stopped (an account that
+has been signed out, or the stretch when a token was revoked). Each account's clock and countdown are
+rendered from the time the server gave; a window that has just refilled, or whose reset time has passed,
+reads `已重置`, with its bar drawn full green.
 
 ## How the numbers are read
 
@@ -75,48 +61,34 @@ codex.exe app-server --listen stdio://
 
 then calls `account/rateLimits/read` over JSON-RPC and tells the windows apart by `windowDurationMins`
 (about 300 minutes → 5H, about 10080 → week) rather than assuming which of `primary`/`secondary` is which.
-`rateLimitResetCredits`, a sibling of `rateLimits` in the same answer, is how many reset credits the account
-has left; the panel's tickets come from it. Each read starts a process and ends it (a read takes about
-1.5 seconds).
+`rateLimitResetCredits` in the same answer is how many reset credits the account has left; the panel's
+tickets come from it. Each read starts a process and ends it (about 1.5 seconds per read).
 
 - **Read-only**: it never writes to or changes any Codex file; `auth.json` is only read, to find out which
   account is logged in.
 - **No credentials stored**: an account record holds an id, an email, percentages and times. No tokens.
-- The app's own state lives in `%LOCALAPPDATA%\CodexQuotaChip\`.
+- The state files live in `%LOCALAPPDATA%\CodexQuotaChip\`.
 
 ### How a refill is recognised
 
-Two cases get a word:
-
-- **The account being read**: not by the local clock, and with no extra state kept - when a window refills
-  the server pushes `resetsAt` **forward by nearly a whole window** (about five hours for the 5-hour window,
-  about seven days for the weekly one), so "the reset time jumped forward by at least 70% of the window" is
-  what counts as a refill. That stays right across restarts, sleep and the app not running at all, and the
-  same refill is never announced twice. A window with **no** reset time in the previous record is one that
-  has just started being used: not a refill, no notification.
+- **The account being read**: not by the local clock - when a window refills the server pushes `resetsAt`
+  forward by nearly a whole window, so "the reset time jumped forward by at least 70% of the window" is what
+  counts as a refill; that stays right across restarts, sleep and the app not running at all, and the same
+  refill is never announced twice.
 - **An account that is not being read**: nothing is consuming its quota, so once the reset time in its last
   reading goes by, the window is full again - announced once, with the small print saying it was worked out
-  from that last reading. Reporting it marks the record full and drops its reset time, so it cannot repeat.
-
-**Why the threshold has to be that high**: the server slides the end of the weekly window forward a little
-as you use it (minutes at a time). 0.2.2 started out calling any forward move a refill, so every single read
-qualified - a false notification every two or three minutes. 0.2.3 judges by window length instead, and no
-amount of drift reaches 70%.
+  from that last reading.
 
 Notifications go through system toasts (they land in the Action Center and honour Focus Assist / do not
-disturb). The app registers an app id for itself under
-`HKCU\Software\Classes\AppUserModelId\easerlee.CodexQuotaChip`, and makes the **process** answer to that same
-app id - an unpackaged program that skips the second half gets its toast taken and then quietly dropped
-(that is what 0.2.13 fixed). No Start Menu shortcut and no installer are needed. After sending, the app
-checks the system's own history to confirm the toast arrived; if it did not, or the system has no toast
-interface, it falls back to a notification-area balloon.
+disturb): the app registers an app id for itself and makes the process answer to the same one - an unpackaged
+program that skips the second half gets its toast taken and then quietly dropped. After sending, it checks
+the system's own history and falls back to a notification-area balloon if the toast did not arrive.
 
 ## Installing
 
-A portable package, no administrator rights needed:
+A portable package, no administrator rights needed. After unzipping, in that folder:
 
 ```powershell
-# after unzipping, in that folder
 pwsh -File .\install.ps1            # installs to %LOCALAPPDATA%\Programs\CodexQuotaChip
 pwsh -File .\install.ps1 -Autostart # and writes the autostart entry
 ```
@@ -139,8 +111,8 @@ for `codex.exe` under `%LOCALAPPDATA%\OpenAI\Codex\bin\*\` or on `PATH`).
 ## Settings file
 
 `%LOCALAPPDATA%\CodexQuotaChip\settings.json`; every key and its default is in
-[`settings.example.json`](settings.example.json). `CODEX_QUOTA_CHIP_HOME`, or `--home` on the command line,
-moves the state folder elsewhere. What the panel changes is written here too.
+[`settings.example.json`](settings.example.json), and what the panel changes is written here too.
+`CODEX_QUOTA_CHIP_HOME` or `--home` moves the state folder elsewhere.
 
 ## Command line
 
@@ -166,8 +138,8 @@ pwsh -File .\build-publish.ps1 -Version 0.2.13               # zip under publish
 ```
 
 The icon is not a binary dropped in the repository: `tools/make-icon.ps1` draws it - a dark rounded square
-with the two quota bars - at 16/24/32/48/64/128/256. The README's header image, `docs/icon.png`, comes out of
-the same script, so a new look is a script change and a rerun.
+with the two quota bars - at 16/24/32/48/64/128/256, and the README's header image `docs/icon.png` comes out
+of the same script.
 
 The self-tests cover what has a rule worth stating: parsing and window classification, turning a reading
 into text, account ordering, where the strip parks, bar geometry, how the strip's width is measured, the
@@ -177,16 +149,15 @@ account record file.
 
 ## Known limits
 
-- `codex app-server` is not a promised-stable interface, so a desktop Codex update can change method or
-  field names. When a read fails the reason goes to the log
-  (`%LOCALAPPDATA%\CodexQuotaChip\logs\app.log`), the strip keeps the last good reading, and the status
-  light turns amber or red.
-- Only the **logged-in account** is read. An account that has been signed out keeps the numbers from the
-  last time it was read, and its dot goes grey to say that this link has stopped; its countdown is drawn
-  locally from the stored reset time, so once that time passes it reads `已重置` and **says so once** -
-  a local inference (nothing is consuming that account's quota, so its time running out means it is full
-  again), not another read of the server. Keeping it refreshing would mean storing credentials for every
-  account, which this app deliberately does not do.
+- `codex app-server` is not a promised-stable interface, so a desktop Codex update can change method or field
+  names; when a read fails the reason goes to the log
+  (`%LOCALAPPDATA%\CodexQuotaChip\logs\app.log`), the strip keeps the last good reading and the status light
+  turns amber or red.
+- Only the **logged-in account** is read. An account that has been signed out keeps the numbers from the last
+  time it was read (its dot goes grey), and its countdown is drawn locally from the stored reset time - once
+  that passes it reads `已重置` and says so once. That is an inference, not another read of the server.
+  Keeping it refreshing would mean storing credentials for every account, which this app deliberately does
+  not do.
 - The numbers are for everyday reference, not for billing.
 
 ## Licence
