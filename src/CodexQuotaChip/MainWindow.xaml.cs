@@ -395,6 +395,10 @@ public partial class MainWindow : Window
             ? task.Result
             : QuotaReading.Failed(task.Exception?.GetBaseException().Message ?? "read failed");
 
+        // Before the new reading is filed, so a window that ran out of time while the app was shut
+        // (or while the account was not the one being read) is still visible in the record.
+        WatchRefills();
+
         if (reading.Ok)
         {
             _reading = reading;
@@ -419,6 +423,68 @@ public partial class MainWindow : Window
         }
 
         Render();
+    }
+
+    // A window refills whether or not its account is the one being read - and the account nobody is
+    // reading is exactly the one that used to go unannounced. So every record on file is checked
+    // before the fresh reading is filed: a window whose reset time has gone by has refilled, and it
+    // is reported once.
+    //
+    // The record itself is the marker that keeps it to once: the window is marked full and its
+    // reset time dropped (the next one is not known until the server says so), so neither this nor
+    // the jump check - which has nothing left to compare against - can fire for it again.
+    private void WatchRefills()
+    {
+        var now = DateTimeOffset.Now;
+        var currentId = AccountIdentity.Read(_codexHome)?.Id;
+        var records = _accounts.Load().ToList();
+        var changed = false;
+        for (var index = 0; index < records.Count; index++)
+        {
+            var record = records[index];
+            var five = ResetWatch.Refilled(record.FiveHourLeft, record.FiveHourResetsAt, now);
+            var week = ResetWatch.Refilled(record.WeekLeft, record.WeekResetsAt, now);
+            if (!five && !week)
+            {
+                continue;
+            }
+
+            var label = AccountIdentity.Label(record.Email, record.Id);
+            var live = string.Equals(record.Id, currentId, StringComparison.OrdinalIgnoreCase);
+            if (_settings.NotifyOnReset)
+            {
+                if (live)
+                {
+                    _notifier?.Show("Codex 额度已重置", new ResetRollover(five, week).Describe(100, 100));
+                }
+                else
+                {
+                    var what = five && week ? "5 小时和周额度已恢复" : five ? "5 小时额度已恢复" : "周额度已恢复";
+                    _notifier?.Show($"「{label}」{what}", "这个账号现在没在登录，按它最后一次读数里的重置时间推算");
+                }
+
+                _log.Info($"quota refill notified (account={label}, live={live}, 5h={five}, week={week})");
+            }
+
+            records[index] = record with
+            {
+                FiveHourLeft = five ? 100 : record.FiveHourLeft,
+                FiveHourResetsAt = five ? null : record.FiveHourResetsAt,
+                WeekLeft = week ? 100 : record.WeekLeft,
+                WeekResetsAt = week ? null : record.WeekResetsAt
+            };
+            changed = true;
+        }
+
+        if (!changed)
+        {
+            return;
+        }
+
+        foreach (var record in records)
+        {
+            _accounts.Upsert(record);
+        }
     }
 
     // File this reading under whoever is logged in right now. Switching accounts later leaves the

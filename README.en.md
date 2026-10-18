@@ -48,6 +48,9 @@ reads `已重置`, with its bar drawn full green.
 - **A Windows notification when a quota window refills**: it lands in the Action Center, honours Focus
   Assist, is judged separately for the 5-hour and the weekly window, never fires twice for the same refill,
   and can be switched off.
+- **Accounts that are not signed in are announced too**: nothing is consuming their quota, so once the
+  reset time they last reported goes by, the window is full again. The notification says it was worked
+  out from that last reading, because the app genuinely cannot read them.
 - An optional **dark rounded plate** behind the strip; the palette follows the taskbar, or stays dark.
 - The switches you would expect: read interval, docking side (left of the tray / the taskbar's far end),
   start with Windows, the refill notification, the plate - all in the right-click panel, effective
@@ -162,9 +165,10 @@ settings file, re-resolving codex.exe when it disappears, and the account record
   light turns amber or red.
 - Only the **logged-in account** is read. An account that has been signed out keeps the numbers from the
   last time it was read, and its dot goes grey to say that this link has stopped; its countdown is drawn
-  locally from the stored reset time, so it reads `已重置` once that time passes - a local inference, not
-  another read of the server. Keeping it refreshing would mean storing credentials for every account,
-  which this app deliberately does not do.
+  locally from the stored reset time, so once that time passes it reads `已重置` and **says so once** -
+  a local inference (nothing is consuming that account's quota, so its time running out means it is full
+  again), not another read of the server. Keeping it refreshing would mean storing credentials for every
+  account, which this app deliberately does not do.
 - The numbers are for everyday reference, not for billing.
 
 ## Licence

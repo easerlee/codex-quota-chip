@@ -15,6 +15,7 @@ var tests = new (string Name, Action Body)[]
     ("a refilled window shows a full bar", TestBarPercent),
     ("the light follows the link, not the login", TestFreshness),
     ("the strip is measured from its longest line", TestStripWidth),
+    ("a window that ran out of time is reported once", TestRefillWatch),
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
@@ -482,6 +483,25 @@ static void TestStripWidth()
     var strip = MainWindow.StripWidth(1.0);
     Equal(true, strip > 116, "the strip is wider than the fixed width it used to have");
     Equal(true, strip >= needed + 6, "and it covers the row plus the strip's own margins");
+}
+
+static void TestRefillWatch()
+{
+    var now = DateTimeOffset.FromUnixTimeSeconds(1_800_000_000);
+
+    // A window that had been used, whose reset time has gone by, is full again - the refill that used
+    // to go unannounced because that account is not the one being read.
+    Equal(true, ResetWatch.Refilled(0, 1_799_999_999, now), "a used window that ran out of time has refilled");
+
+    // Nothing to say about a window that was already full, one still running, or one never read.
+    Equal(false, ResetWatch.Refilled(100, 1_799_999_999, now), "a window that was already full says nothing");
+    Equal(false, ResetWatch.Refilled(0, 1_800_000_001, now), "a window with time left says nothing");
+    Equal(false, ResetWatch.Refilled(null, 1_799_999_999, now), "no reading, no claim");
+    Equal(false, ResetWatch.Refilled(42, null, now), "no reset time, no claim");
+
+    // What the app writes back when it reports one - full, with the reset time dropped - is what
+    // keeps the same window from being reported again.
+    Equal(false, ResetWatch.Refilled(100, null, now), "a reported refill is not reported again");
 }
 
 static void Equal<T>(T expected, T actual, string what)

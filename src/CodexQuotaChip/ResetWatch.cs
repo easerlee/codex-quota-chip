@@ -22,6 +22,16 @@ public static class ResetWatch
     public static ResetRollover Check(long? beforeFiveHour, long? beforeWeek, long? fiveHour, long? week) =>
         new(Rolled(beforeFiveHour, fiveHour, FiveHourMinutes), Rolled(beforeWeek, week, WeekMinutes));
 
+    // The other half of the question, for windows that are not being read. An account that is not
+    // logged in is not being used, so nothing is consuming its quota: when the reset time it last
+    // reported goes by, the window is full again. That is the same reading the panel already shows
+    // as 已重置 - this is what makes the app say it out loud.
+    //
+    // A window that was already full when it ran out of time has not changed, and one that never had
+    // a reading cannot be claimed either way, so both stay quiet.
+    public static bool Refilled(double? left, long? resetsAt, DateTimeOffset now) =>
+        left is < 99.5 && resetsAt is long end && end <= now.ToUnixTimeSeconds();
+
     private static bool Rolled(long? before, long? now, int windowMinutes) =>
         before is long was &&
         now is long isNow &&
