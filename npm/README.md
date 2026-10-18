@@ -1,5 +1,9 @@
 # codex-quota-chip (npm wrapper)
 
+> 仓库首页有中英文两版说明：[简体中文](https://github.com/easerlee/codex-quota-chip#readme)
+> ・ [English](https://github.com/easerlee/codex-quota-chip/blob/main/README.en.md)
+> ・ [更新记录](https://github.com/easerlee/codex-quota-chip/blob/main/CHANGELOG.md)
+
 这是 [Codex Quota Chip](https://github.com/easerlee/codex-quota-chip) 的 npm 外壳。
 **它不是 JavaScript 库** —— 本体是 C#/WPF 的 Windows 桌面程序，所以这个包做的事只有三件：
 

@@ -22,6 +22,8 @@ dotnet publish (Join-Path $root 'src\CodexQuotaChip\CodexQuotaChip.csproj') `
 Copy-Item (Join-Path $root 'install.ps1') $out -Force
 Copy-Item (Join-Path $root 'uninstall.ps1') $out -Force
 Copy-Item (Join-Path $root 'README.md') $out -Force
+Copy-Item (Join-Path $root 'README.en.md') $out -Force
+Copy-Item (Join-Path $root 'CHANGELOG.md') $out -Force
 Copy-Item (Join-Path $root 'LICENSE') $out -Force
 
 $zip = Join-Path $root "publish\CodexQuotaChip-$Version-$Runtime.zip"
