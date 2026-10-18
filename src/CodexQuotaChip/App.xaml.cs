@@ -77,7 +77,10 @@ public partial class App : Application
     private void Check(Paths paths, string codexHome, CodexExe codexExe)
     {
         Win32.AttachToParentConsole();
-        var placement = CodexQuotaChip.MainWindow.ResolvePlacement(116, false);
+        // The width the overlay works out for itself, 1.0 pixels per dip because there is no window
+        // here to ask and the taskbar sits on the primary monitor.
+        var width = CodexQuotaChip.MainWindow.StripWidth(1.0);
+        var placement = CodexQuotaChip.MainWindow.ResolvePlacement(width, false);
         Console.WriteLine($"state   : {paths.Root}");
         Console.WriteLine($"settings: {paths.Settings}");
         Console.WriteLine($"codex   : {codexHome}");

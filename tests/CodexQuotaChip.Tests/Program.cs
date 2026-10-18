@@ -14,6 +14,7 @@ var tests = new (string Name, Action Body)[]
     ("reset credits come out of the same answer", TestResetCredits),
     ("a refilled window shows a full bar", TestBarPercent),
     ("the light follows the link, not the login", TestFreshness),
+    ("the strip is measured from its longest line", TestStripWidth),
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
@@ -467,6 +468,20 @@ static void TestFreshness()
 
     Equal(true, Freshness.IsLive(now.AddMinutes(-20), now, 900), "a slow refresh stays live longer");
     Equal(false, Freshness.IsLive(now.AddMinutes(-31), now, 900), "and gives up after its own window");
+}
+
+static void TestStripWidth()
+{
+    // The line that used to be cut off ("11:25 / 6d..."), measured the way the bottom row draws it.
+    var real = ResetRow.LineWidth("11:25 / 6d 20h", 16, 1.0);
+    var needed = ResetRow.RequiredWidth(16, 1.0);
+    Equal(true, needed >= real, "the bottom row fits a real countdown");
+
+    // 116 was the fixed width that did not fit it; the strip is measured now, and the margins are
+    // on top of what the row itself asks for.
+    var strip = MainWindow.StripWidth(1.0);
+    Equal(true, strip > 116, "the strip is wider than the fixed width it used to have");
+    Equal(true, strip >= needed + 6, "and it covers the row plus the strip's own margins");
 }
 
 static void Equal<T>(T expected, T actual, string what)

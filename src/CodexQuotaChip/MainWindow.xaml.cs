@@ -15,6 +15,11 @@ public partial class MainWindow : Window
     // The gap between the card and the settings layer that opens beside it.
     private const double SettingsGap = 8;
 
+    // Root's Margin in MainWindow.xaml, repeated here because the strip's width is worked out before
+    // there is a layout to read it from.
+    private const double StripMarginX = 3;
+    private const double StripMarginY = 1;
+
     private readonly Paths _paths;
     private readonly Log _log;
     private readonly Settings _settings;
@@ -23,6 +28,7 @@ public partial class MainWindow : Window
     private readonly AccountFile _accounts;
 
     private readonly Border _plate;
+    private readonly int _stripWidth;
     private readonly GaugeRow _fiveHour;
     private readonly GaugeRow _week;
     private readonly ResetRow _resetLine;
@@ -66,7 +72,10 @@ public partial class MainWindow : Window
         _accounts = new AccountFile(paths.Accounts);
 
         InitializeComponent();
-        Width = DefaultWidth;
+        // As wide as the bottom row needs to be, and never a fixed 116: the clock and the weekly
+        // countdown are what set it, and every pixel they do not need is bar.
+        _stripWidth = StripWidth(VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        Width = _stripWidth;
         Height = DefaultHeight;
 
         for (var row = 0; row < 3; row++)
@@ -633,7 +642,7 @@ public partial class MainWindow : Window
             Win32.Own(new TaskbarOwner(_handle));
         }
 
-        var placement = ResolvePlacement(DefaultWidth, _settings.DisplayLeft);
+        var placement = ResolvePlacement(_stripWidth, _settings.DisplayLeft);
         if (_handle == IntPtr.Zero)
         {
             Left = placement.X;
@@ -649,6 +658,17 @@ public partial class MainWindow : Window
         }
 
         Win32.PlaceWithoutActivating(_handle, placement);
+    }
+
+    // The strip is as wide as the longest line its bottom row can show, and every pixel the rows do
+    // not need goes to the bars. Kept static so --check can report the width the app would really
+    // take without building a window.
+    public static int StripWidth(double pixelsPerDip)
+    {
+        var rowHeight = (DefaultHeight - (StripMarginY * 2)) / 3.0;
+        var content = ResetRow.RequiredWidth(rowHeight, pixelsPerDip);
+        // One pixel of rounding: the measurement is exact, the layout is not.
+        return (int)Math.Ceiling(Math.Max(DefaultWidth, (StripMarginX * 2) + content + 1));
     }
 
     public static WindowPlacement ResolvePlacement(int preferredWidth, bool pinLeft)
