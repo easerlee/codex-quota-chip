@@ -12,6 +12,9 @@ public partial class MainWindow : Window
     private const int DefaultWidth = 116;
     private const int DefaultHeight = 48;
 
+    // The gap between the card and the settings layer that opens beside it.
+    private const double SettingsGap = 8;
+
     private readonly Paths _paths;
     private readonly Log _log;
     private readonly Settings _settings;
@@ -242,18 +245,43 @@ public partial class MainWindow : Window
         return [new CustomPopupPlacement(_panelAnchor.Value, PopupPrimaryAxis.Horizontal)];
     }
 
-    // The settings layer sits against the right edge of the card it was opened from, sharing its
-    // bottom: the two rise from the cursor together. Anchored once, like the card itself.
+    // The settings layer goes against the right edge of the card it was opened from, a little way
+    // off it, with the two bottoms on the same line. That is read from the card's own window
+    // rectangle rather than from the cursor, so it lands there whatever the card did with the point
+    // it was given. Anchored once, like the card itself.
     private CustomPopupPlacement[] PlaceSettings(Size popup, Size target, Point offset)
     {
         if (_settingsAnchor is null)
         {
-            var cursor = System.Windows.Input.Mouse.GetPosition(this);
-            var height = _panel?.ActualHeight ?? popup.Height;
-            _settingsAnchor = new Point(cursor.X + 18, cursor.Y - height - 10);
+            _settingsAnchor = SettingsAnchorFor(popup);
         }
 
-        return [new CustomPopupPlacement(_settingsAnchor.Value, PopupPrimaryAxis.Horizontal)];
+        // Nothing readable to line up with: let WPF place it where it likes instead of throwing.
+        return _settingsAnchor is null
+            ? []
+            : [new CustomPopupPlacement(_settingsAnchor.Value, PopupPrimaryAxis.Horizontal)];
+    }
+
+    private Point? SettingsAnchorFor(Size popup)
+    {
+        if (_panel is null
+            || !Win32.TryWindowRect(_handle, out var chip)
+            || PresentationSource.FromVisual(_panel) is not HwndSource card
+            || !Win32.TryWindowRect(card.Handle, out var cardRect))
+        {
+            return null;
+        }
+
+        var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        if (scale <= 0)
+        {
+            scale = 1;
+        }
+
+        // Window rectangles are physical pixels; the placement point is in the card's own units.
+        return new Point(
+            ((cardRect.Right - chip.Left) / scale) + SettingsGap,
+            ((cardRect.Bottom - chip.Top) / scale) - popup.Height);
     }
 
     private void CheckPanelDismiss()
