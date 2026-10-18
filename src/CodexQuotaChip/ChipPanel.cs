@@ -135,6 +135,10 @@ public sealed class ChipPanel : Border
         return offered;
     }
 
+    // Sits right after the name of the account that is logged in now, so the rows under it read as
+    // "these numbers belong to the live one".
+    public const string CurrentMarker = "【当前】";
+
     // The account name, with that account's reset tickets sitting on the right-hand edge of the
     // row - the same edge the metrics' reset column ends on. A right-aligned strip grows leftwards,
     // so a second ticket lands to the left of the first.
@@ -160,6 +164,15 @@ public sealed class ChipPanel : Border
         label.FontWeight = FontWeights.SemiBold;
         label.VerticalAlignment = VerticalAlignment.Center;
         head.Children.Add(label);
+
+        if (current)
+        {
+            // Small and grey: a marker on the name, not a second name competing with it.
+            var marker = Caption(CurrentMarker, Theme.Panel.Dim, 11);
+            marker.VerticalAlignment = VerticalAlignment.Center;
+            marker.Margin = new Thickness(5, 1, 0, 0);
+            head.Children.Add(marker);
+        }
 
         Grid.SetColumn(head, 0);
         row.Children.Add(head);
