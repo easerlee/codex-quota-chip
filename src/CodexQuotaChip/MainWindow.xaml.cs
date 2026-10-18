@@ -78,6 +78,13 @@ public partial class MainWindow : Window
         Width = _stripWidth;
         Height = DefaultHeight;
 
+        // A tool window with no taskbar button never shows a title on hover, so the two mouse
+        // actions have to be a tooltip of their own. The window is not click-through - it keeps the
+        // mouse messages it needs for this (and for the panel's click-outside rule).
+        ToolTip = "左键刷新.右键设置";
+        ToolTipService.SetInitialShowDelay(this, 300);
+        ToolTipService.SetShowDuration(this, 10000);
+
         for (var row = 0; row < 3; row++)
         {
             Root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });

@@ -141,7 +141,7 @@ public sealed class ChipPanel : Border
         }
 
         _rows.Children.Add(Divider());
-        _rows.Children.Add(CommandRow("刷新（或点状态栏数据）", _refresh));
+        _rows.Children.Add(CommandRow("刷新当前账号数据", _refresh));
         _rows.Children.Add(CommandRow("设置 ›", _openSettings));
         _rows.Children.Add(Divider());
         _rows.Children.Add(CommandRow("退出", _exit, danger: true));
