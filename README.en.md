@@ -6,80 +6,53 @@ A small Codex quota strip that lives on the Windows taskbar: one glance for what
 
 **English** | [简体中文](README.md) ・ [Changelog](CHANGELOG.md)
 
+![The taskbar strip](docs/chip.png)
+
 </div>
-
-A small tool for the Windows taskbar. It parks next to the notification area (or at the taskbar's far
-end - see below), shows how much of the **5-hour window** and the **weekly window** is left for the
-account that is logged in now and when each one refills, and opens a panel on right-click listing the
-last values read for every account this machine has used.
-
-It is an **independent implementation**: the numbers come from a JSON-RPC client of its own talking to
-the local Codex command line, and the UI is drawn from scratch. It is not a fork of any similar tool.
 
 ## What it looks like
 
-```
-┌──────────────────────────────┐   ← dark plate, can be switched off in settings
-│ 5H  ▬▬▬▬▬▬▬▬▬▬▬▬▬▬           │      colour follows what is left: green / amber / red
-│ WK  ▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬    │
-│ 09:16 / 6d 18h            ●  │   ← 5H reset clock / weekly countdown + status light
-└──────────────────────────────┘
-```
+A small block on the taskbar, three lines: the 5-hour bar, the weekly bar, and "5H reset clock / weekly
+countdown + status light". The bars change colour with what is left (green / amber / red), and the small
+dot at the bottom right is the status light (fine / reading or the data has gone stale / nothing read yet /
+the read failed).
 
-- **The width is measured, not fixed**: the card is as wide as the longest line its bottom row can
-  ever show (`23:59 / 13d 23h`, `已重置 / 已重置`, `--:-- / reset --` and friends), and every pixel
-  the rows do not need goes to the bars. The height is the taskbar's, split into three equal rows.
-- **Dark plate** (on by default): the panel's own colour `#F0141619`, 8px corners, 3px in from the
-  sides and 1px from the top and bottom - 46px tall on a 48px taskbar. Its switch lives in the
-  settings layer.
-- **Colours**: with the plate off, the text and bars follow the taskbar's light/dark setting; with it
-  on, the whole strip uses the dark set. Near-black text on a near-black plate is invisible, so the
-  two have to change together.
-- **Status light** (the dot at the bottom right): green = fine, amber = reading, or the data has gone
-  stale, grey = nothing read yet, red = the read failed. "Stale" means no successful read for two
-  refresh intervals (`Freshness`, the same rule the panel uses).
-- **Left click** refreshes on the spot. **Right click** opens the panel. **Hover** shows
-  `左键刷新.右键设置` (left click refreshes, right click opens settings).
-- Hides itself while a fullscreen app is in front, and comes back afterwards.
-- **A Windows notification when a quota window refills** (it lands in the Action Center; the 5-hour and
-  the weekly window are judged separately). Switch it off in the settings layer if you would rather not.
-- One instance only; never appears in the taskbar list or in Alt+Tab.
+By default it draws a dark rounded plate behind itself, the same colour as the right-click panel; switch it
+off and the content sits straight on the taskbar. The palette follows the taskbar's light/dark setting, and
+is the dark set while the plate is on.
 
-The panel has two levels: the card on the left, and - once 设置 › is clicked - a **second layer to its
-right** (it never displaces the card; one click opens it, the next closes it):
+The width is not fixed: it is measured from the longest line the bottom row can ever show, and every pixel
+the rows do not need goes to the bars.
 
-```
-● easerlee 【当前】        🎫     │  刷新间隔        [1][5][15]
-  5H   20%   09:16       │  显示位置           [左][右]
-  WK   72%   6d 18h      │  黑色底图             ●──
-─────────────────────── │  开机自动启动         ●──
-刷新当前账号数据            │  额度重置时通知       ●──
-设置 ›                   │
-─────────────────────── │
-退出                     │
-```
+The mouse: **left click refreshes, right click opens the panel, hovering shows the hint**. The strip steps
+aside while a fullscreen app is in front, and comes back afterwards.
 
-- **The dot in front of an account is the link, not the login**: green while the app is still hearing
-  from that account, grey once its reading has stopped (a revoked token shows up here). Which account
-  is logged in is what `【当前】` - right after the name - is for.
-- Accounts are ordered "the logged-in one first, then whoever frees up soonest"; windows that already
-  reset, or that have not started counting, count as usable now and sort ahead of the ones still
-  running; a record with no reset time sorts last.
-- `已重置` means the window is full but has not started counting, or its reset time has passed - the
-  percentage and reset time the server last gave are not trustworthy then (the 5-hour window starts at
-  **first use**), so no old numbers are shown. **Its bar is drawn full green**, because a window that
-  just refilled is full.
-- **The gold ticket next to an account name** is how many **manual quota resets** that account has left
-  (the server's `availableCount`), right-aligned to the same edge as the account's other numbers; extra
-  tickets stack leftwards, and hovering one shows the expiry of the nearest. Tickets the server has
-  already redeemed, or that have expired, are not drawn.
-- The rows in the settings layer are sliding controls: the track is the bar's own track colour, the
-  selection is the bar's green. Changing one **does not close the panel** - the control itself is the
-  feedback.
-- **显示位置**: `right` (the default) sits left of the notification area; `left` goes to the taskbar's
-  far end - which is empty when Windows 11 centres the taskbar, so `left` suits that case. With a
-  left-aligned taskbar use `right`, or the strip covers the Start button.
-- Clicking anywhere outside the panel - either layer - closes it: another app, the taskbar, the desktop.
+The right-click panel:
+
+![The right-click panel](docs/panel.png)
+
+One block per account this machine has used: the name (the logged-in one is marked `【当前】`), the tickets
+for how many manual resets it has left, and the two rows of numbers. The dot in front of a name says whether
+that account's data is still being refreshed - green while it is live, grey once it has stopped (an account
+that has been signed out, or the stretch when a token was revoked). Each account's clock and countdown are
+rendered from the time the server gave; a window that has just refilled, or whose reset time has passed,
+reads `已重置`, with its bar drawn full green.
+
+## What it does
+
+- One glance at how much of the **logged-in account's** 5-hour and weekly window is left, and when each refills.
+- Lives on the taskbar: no window, no Alt+Tab entry, never takes focus, one instance only.
+- The right-click panel lists the last values read for **every account** this machine has used, and marks
+  which one is logged in now.
+- Shows how many **manual resets** an account has left, as ticket icons (with each one's expiry date).
+- **A Windows notification when a quota window refills**: it lands in the Action Center, honours Focus
+  Assist, is judged separately for the 5-hour and the weekly window, never fires twice for the same refill,
+  and can be switched off.
+- An optional **dark rounded plate** behind the strip; the palette follows the taskbar, or stays dark.
+- The switches you would expect: read interval, docking side (left of the tray / the taskbar's far end),
+  start with Windows, the refill notification, the plate - all in the right-click panel, effective
+  immediately, or edit the JSON settings file directly.
+- **Read-only, no credentials stored**: see below.
 
 ## How the numbers are read
 
@@ -90,16 +63,34 @@ codex.exe app-server --listen stdio://
 ```
 
 then calls `account/rateLimits/read` over JSON-RPC and tells the windows apart by `windowDurationMins`
-(about 300 minutes → 5H, about 10080 → week) rather than assuming which of `primary`/`secondary` is
-which. `rateLimitResetCredits`, a sibling of `rateLimits` in the same answer, is how many reset credits
-the account has left (`availableCount`, and each credit's `status`/`expiresAt`); the panel's tickets come
-from it. Each read starts a process and ends it (a read takes about 1.5 seconds).
+(about 300 minutes → 5H, about 10080 → week) rather than assuming which of `primary`/`secondary` is which.
+`rateLimitResetCredits`, a sibling of `rateLimits` in the same answer, is how many reset credits the account
+has left; the panel's tickets come from it. Each read starts a process and ends it (a read takes about
+1.5 seconds).
 
-- **Read-only**: it never writes to or changes any Codex file; `auth.json` is only read, to find out
-  which account is logged in.
+- **Read-only**: it never writes to or changes any Codex file; `auth.json` is only read, to find out which
+  account is logged in.
 - **No credentials stored**: an account record holds an id, an email, percentages and times. No tokens.
-- The app's own state lives in `%LOCALAPPDATA%\CodexQuotaChip\` (move it with the environment variable
-  `CODEX_QUOTA_CHIP_HOME` or `--home`).
+- The app's own state lives in `%LOCALAPPDATA%\CodexQuotaChip\`.
+
+### How a refill is recognised
+
+Not by the local clock, and with no extra state kept: when a window refills the server pushes `resetsAt`
+**forward by nearly a whole window** (about five hours for the 5-hour window, about seven days for the
+weekly one), so "the reset time jumped forward by at least 70% of the window" is what counts as a refill.
+That stays right across restarts, sleep and the app not running at all, and the same refill is never
+announced twice. A window with **no** reset time in the previous record is one that has just started being
+used: not a refill, no notification.
+
+**Why the threshold has to be that high**: the server slides the end of the weekly window forward a little
+as you use it (minutes at a time). 0.2.2 started out calling any forward move a refill, so every single read
+qualified - a false notification every two or three minutes. 0.2.3 judges by window length instead, and no
+amount of drift reaches 70%.
+
+Notifications go through system toasts (they land in the Action Center and honour Focus Assist / do not
+disturb). On its first run the app registers an app id for itself under
+`HKCU\Software\Classes\AppUserModelId\easerlee.CodexQuotaChip` - no Start Menu shortcut and no installer
+needed. If the system has no toast interface it falls back to a notification-area balloon.
 
 ## Installing
 
@@ -111,9 +102,9 @@ pwsh -File .\install.ps1            # installs to %LOCALAPPDATA%\Programs\CodexQ
 pwsh -File .\install.ps1 -Autostart # and writes the autostart entry
 ```
 
-`CodexQuotaChip.exe` in the zip can also just be double-clicked (self-contained, no .NET needed).
-Autostart can be toggled from the panel too; `uninstall.ps1` removes the autostart entry and the install
-folder (`-Purge` takes the state files with it).
+`CodexQuotaChip.exe` in the zip can also just be double-clicked (self-contained, no .NET needed). Autostart
+can be toggled from the panel too; `uninstall.ps1` removes the autostart entry and the install folder
+(`-Purge` takes the state files with it).
 
 There is an npm package as well - it is only a wrapper: on install it downloads the zip from the matching
 Release and refuses to unpack it unless the sha256 matches:
@@ -123,43 +114,14 @@ npm install -g codex-quota-chip
 codex-quota-chip --check
 ```
 
-Requirements: Windows 10/11 x64, and a Windows desktop Codex that is installed and signed in (the app
-looks for `codex.exe` under `%LOCALAPPDATA%\OpenAI\Codex\bin\*\` or on `PATH`).
+Requirements: Windows 10/11 x64, and a Windows desktop Codex that is installed and signed in (the app looks
+for `codex.exe` under `%LOCALAPPDATA%\OpenAI\Codex\bin\*\` or on `PATH`).
 
-## Settings
+## Settings file
 
-`%LOCALAPPDATA%\CodexQuotaChip\settings.json` (see `settings.example.json`):
-
-| key | default | meaning |
-|---|---|---|
-| `refresh_seconds` | 60 | how often to read, minimum 30 |
-| `display_side` | `right` | `right` = left of the tray, `left` = the taskbar's far end |
-| `warn_below` | 30 | below this much left, turn amber |
-| `critical_below` | 15 | below this much left, turn red |
-| `notify_on_reset` | true | notify when a quota window refills |
-| `plate` | true | draw the dark rounded plate behind the strip |
-
-Everything the panel offers is stored here, and editing the file by hand is fine - a change takes effect
-at the next start or the next time the panel is opened.
-
-### How a refill is recognised
-
-Not by the local clock, and with no extra state kept: when a window refills the server pushes `resetsAt`
-**forward by nearly a whole window** (about five hours for the 5-hour window, about seven days for the
-weekly one), so "the reset time jumped forward by at least 70% of the window" is what counts as a
-refill. That stays right across restarts, sleep and the app not running at all, and the same refill is
-never announced twice. A window with **no** reset time in the previous record is one that has just
-started being used: not a refill, no notification.
-
-**Why the threshold has to be that high**: the server slides the end of the weekly window forward a
-little as you use it (minutes at a time). 0.2.2 started out calling any forward move a refill, so every
-single read qualified - a false notification every two or three minutes. 0.2.3 judges by window length
-instead, and no amount of drift reaches 70%.
-
-Notifications go through system toasts (they land in the Action Center and honour Focus Assist /
-do not disturb). On its first run the app registers an app id for itself under
-`HKCU\Software\Classes\AppUserModelId\easerlee.CodexQuotaChip` - no Start Menu shortcut and no installer
-needed. If the system has no toast interface it falls back to a notification-area balloon.
+`%LOCALAPPDATA%\CodexQuotaChip\settings.json`; every key and its default is in
+[`settings.example.json`](settings.example.json). `CODEX_QUOTA_CHIP_HOME`, or `--home` on the command line,
+moves the state folder elsewhere. What the panel changes is written here too.
 
 ## Command line
 
@@ -181,16 +143,16 @@ Needs the .NET 8 SDK:
 dotnet build .\src\CodexQuotaChip\CodexQuotaChip.csproj -c Release
 dotnet run   --project .\tests\CodexQuotaChip.Tests          # self-tests
 pwsh -File .\tools\make-icon.ps1                             # regenerate app.ico
-pwsh -File .\build-publish.ps1 -Version 0.2.11               # zip under publish\
+pwsh -File .\build-publish.ps1 -Version 0.2.12               # zip under publish\
 ```
 
-The icon is not a binary dropped in the repository: `tools/make-icon.ps1` draws it - a dark rounded
-square with the two quota bars - at 16/24/32/48/64/128/256, so a new look is a script change and a rerun.
+The icon is not a binary dropped in the repository: `tools/make-icon.ps1` draws it - a dark rounded square
+with the two quota bars - at 16/24/32/48/64/128/256, so a new look is a script change and a rerun.
 
 The self-tests cover what has a rule worth stating: parsing and window classification, turning a reading
 into text, account ordering, where the strip parks, bar geometry, how the strip's width is measured, the
-full bar a refilled window gets, the freshness behind the link light, the click-outside rule, repairing
-the settings file, re-resolving codex.exe when it disappears, and the account record file.
+full bar a refilled window gets, the freshness behind the link light, the click-outside rule, repairing the
+settings file, re-resolving codex.exe when it disappears, and the account record file.
 
 ## Known limits
 

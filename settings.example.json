@@ -3,5 +3,6 @@
   "display_side": "right",
   "warn_below": 30,
   "critical_below": 15,
-  "notify_on_reset": true
+  "notify_on_reset": true,
+  "plate": true
 }
