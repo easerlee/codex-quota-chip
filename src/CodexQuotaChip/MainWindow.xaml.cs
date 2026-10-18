@@ -67,7 +67,7 @@ public partial class MainWindow : Window
         // because the chip is only this tall. The panel's switch shows and hides it.
         _plate = new Border
         {
-            CornerRadius = new CornerRadius(3),
+            CornerRadius = new CornerRadius(8),
             Background = new SolidColorBrush(Theme.Panel.Background),
             IsHitTestVisible = false
         };
@@ -89,7 +89,7 @@ public partial class MainWindow : Window
             CornerRadius = new CornerRadius(3),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(0, 0, 2, 0),
+            Margin = new Thickness(0, 0, 7, 0),
             Background = new SolidColorBrush(Theme.Idle(_settings.Plate)),
             IsHitTestVisible = false
         };

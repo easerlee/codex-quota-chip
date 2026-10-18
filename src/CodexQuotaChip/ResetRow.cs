@@ -4,7 +4,7 @@ namespace CodexQuotaChip;
 // right for the status light.
 public sealed class ResetRow : FrameworkElement
 {
-    private const double TextLeft = 4;
+    private const double TextLeft = 8;
     private const double StatusLightRoom = 16;
 
     private string _text = string.Empty;

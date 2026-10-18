@@ -28,6 +28,13 @@ public sealed class ChipPanel : Border
     private static readonly FontFamily UiFont = new(TextDrawing.UiFont);
 
     private readonly StackPanel _rows = new();
+
+    // What the last Fill was told, so the settings page can rebuild itself without asking again.
+    private IReadOnlyList<AccountRecord> _accounts = [];
+    private string? _currentId;
+    private Settings _settings = new();
+    private bool _autostart;
+    private bool _settingsPage;
     private readonly Action _refresh;
     private readonly Func<bool> _toggleAutostart;
     private readonly Func<bool> _toggleNotifications;
@@ -70,13 +77,37 @@ public sealed class ChipPanel : Border
         };
     }
 
-    // Rebuilt on every open, so numbers and switch states are never stale.
+    // Rebuilt on every open, so numbers and switch states are never stale. Opening always lands on
+    // the top page: the second level is for settings, not for staring at.
     public void Fill(IReadOnlyList<AccountRecord> accounts, string? currentId, Settings settings, bool autostart)
     {
-        _rows.Children.Clear();
+        _accounts = accounts;
+        _currentId = currentId;
+        _settings = settings;
+        _autostart = autostart;
+        _settingsPage = false;
+        Width = double.NaN;
+        Build();
+    }
 
+    private void Build()
+    {
+        _rows.Children.Clear();
+        if (_settingsPage)
+        {
+            BuildSettingsPage();
+            return;
+        }
+
+        BuildMainPage();
+    }
+
+    // Accounts first, then the two things worth reaching for. Everything that is a setting lives
+    // one level down, under 设置.
+    private void BuildMainPage()
+    {
         var now = DateTimeOffset.Now;
-        var ordered = AccountOrder.Sort(accounts, currentId, now);
+        var ordered = AccountOrder.Sort(_accounts, _currentId, now);
         if (ordered.Count == 0)
         {
             var empty = Caption("还没有账号记录，取数成功后自动记录", Theme.Panel.Dim, 12);
@@ -98,26 +129,53 @@ public sealed class ChipPanel : Border
             first = false;
             _rows.Children.Add(AccountHead(
                 AccountIdentity.Label(account.Email, account.Id),
-                AccountOrder.IsCurrent(account, currentId),
-                Freshness.IsLive(account.LastSeenAt, now, settings.RefreshSeconds),
+                AccountOrder.IsCurrent(account, _currentId),
+                Freshness.IsLive(account.LastSeenAt, now, _settings.RefreshSeconds),
                 new ResetCredits(account.ResetCredits ?? 0, account.ResetCreditsExpireAt),
                 now));
-            _rows.Children.Add(Metric("5H", account.FiveHourLeft, account.FiveHourResetsAt, now, settings, weekly: false, valueWidth, resetWidth));
-            _rows.Children.Add(Metric("WK", account.WeekLeft, account.WeekResetsAt, now, settings, weekly: true, valueWidth, resetWidth));
+            _rows.Children.Add(Metric("5H", account.FiveHourLeft, account.FiveHourResetsAt, now, _settings, weekly: false, valueWidth, resetWidth));
+            _rows.Children.Add(Metric("WK", account.WeekLeft, account.WeekResetsAt, now, _settings, weekly: true, valueWidth, resetWidth));
         }
 
         _rows.Children.Add(Divider());
-        _rows.Children.Add(SettingRow("刷新间隔", IntervalPicker(settings.RefreshSeconds)));
         _rows.Children.Add(CommandRow("刷新（或点状态栏数据）", _refresh));
-        _rows.Children.Add(Divider());
-        _rows.Children.Add(SettingRow("显示位置", new Segmented(
-            ["左", "右"], settings.DisplayLeft ? 0 : 1, index => _setDisplaySide(index == 0 ? "left" : "right"))));
-        // The plate the overlay draws under itself: same idea as this panel's own background.
-        _rows.Children.Add(SwitchRow("黑色底图", settings.Plate, _togglePlate));
-        _rows.Children.Add(AutostartRow(autostart));
-        _rows.Children.Add(SwitchRow("额度重置时通知", settings.NotifyOnReset, _toggleNotifications));
+        _rows.Children.Add(CommandRow("设置 ›", ShowSettingsPage));
         _rows.Children.Add(Divider());
         _rows.Children.Add(CommandRow("退出", _exit, danger: true));
+    }
+
+    private void BuildSettingsPage()
+    {
+        _rows.Children.Add(CommandRow("‹ 返回", ShowMainPage));
+        _rows.Children.Add(Divider());
+        _rows.Children.Add(SettingRow("刷新间隔", IntervalPicker(_settings.RefreshSeconds)));
+        _rows.Children.Add(SettingRow("显示位置", new Segmented(
+            ["左", "右"], _settings.DisplayLeft ? 0 : 1, index => _setDisplaySide(index == 0 ? "left" : "right"))));
+        // The plate the overlay draws under itself: same idea as this panel's own background.
+        _rows.Children.Add(SwitchRow("黑色底图", _settings.Plate, _togglePlate));
+        _rows.Children.Add(AutostartRow(_autostart));
+        _rows.Children.Add(SwitchRow("额度重置时通知", _settings.NotifyOnReset, _toggleNotifications));
+    }
+
+    // The settings page has fewer and narrower rows than the accounts page, and a card that jumps
+    // narrower under the cursor is jarring - so the width the accounts measured is held while the
+    // second level is shown, and released when the accounts come back.
+    private void ShowSettingsPage()
+    {
+        var width = ActualWidth;
+        _settingsPage = true;
+        Build();
+        if (width > 0)
+        {
+            Width = width;
+        }
+    }
+
+    private void ShowMainPage()
+    {
+        _settingsPage = false;
+        Width = double.NaN;
+        Build();
     }
 
     private Segmented IntervalPicker(int currentSeconds)

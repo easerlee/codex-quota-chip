@@ -3,8 +3,8 @@ namespace CodexQuotaChip;
 // One overlay row: a short label and a bar filled to whatever is left of that window.
 public sealed class GaugeRow : FrameworkElement
 {
-    private const double LabelLeft = 4;
-    private const double BarRightMargin = 2;
+    private const double LabelLeft = 8;
+    private const double BarRightMargin = 8;
 
     private readonly string _label;
     private double? _remaining;

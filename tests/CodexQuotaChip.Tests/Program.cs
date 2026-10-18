@@ -281,7 +281,7 @@ static void TestBarGeometry()
     var narrow = GaugeRow.BarRange(116, 12);
     var tall = GaugeRow.BarRange(116, 20);
     Equal(true, tall.Left >= narrow.Left, "a taller row never starts its bar further left");
-    Equal(114.0, narrow.Right, "the bar ends two pixels inside the row");
+    Equal(108.0, narrow.Right, "the bar ends as far inside the row as the label starts");
 }
 
 static void TestDismiss()
