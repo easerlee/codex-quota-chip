@@ -25,6 +25,14 @@ public partial class MainWindow : Window
     private readonly ResetRow _resetLine;
     private readonly Border _statusLight;
     private readonly Popup _popup = new();
+    private readonly Popup _settingsPopup = new();
+    private ChipPanel? _settingsPanel;
+
+    // Where a layer was first put. WPF asks again whenever the popup's size changes, and answering
+    // from the cursor each time made the card crawl upwards as it was clicked: the answer is worked
+    // out once and handed back unchanged, so where a layer appears is where it stays.
+    private Point? _panelAnchor;
+    private Point? _settingsAnchor;
 
     private readonly DispatcherTimer _renderTimer = new();
     private readonly DispatcherTimer _visibilityTimer = new();
@@ -132,10 +140,16 @@ public partial class MainWindow : Window
 
     private void BuildPanel()
     {
-        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, Exit);
+        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, ToggleSettingsLayer, Exit);
+        _settingsPanel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, ToggleSettingsLayer, Exit, settingsOnly: true);
+
         _popup.PlacementTarget = this;
         _popup.Placement = PlacementMode.Custom;
-        _popup.StaysOpen = false;
+        // Both layers stay open on their own terms: WPF's own click-outside closes a popup as soon
+        // as a press lands anywhere outside it, which would take the card with it the moment the
+        // settings layer was clicked. The window already watches the mouse for that (see Dismiss),
+        // and it counts both rectangles as inside.
+        _popup.StaysOpen = true;
         _popup.AllowsTransparency = true;
         _popup.PopupAnimation = PopupAnimation.Fade;
         _popup.Child = _panel;
@@ -153,20 +167,31 @@ public partial class MainWindow : Window
         {
             _panelOpen = false;
             _panelGuard.Stop();
+            _settingsPopup.IsOpen = false;
             RaiseTopmost();
         };
+
+        _settingsPopup.PlacementTarget = this;
+        _settingsPopup.Placement = PlacementMode.Custom;
+        _settingsPopup.StaysOpen = true;
+        _settingsPopup.AllowsTransparency = true;
+        _settingsPopup.PopupAnimation = PopupAnimation.Fade;
+        _settingsPopup.Child = _settingsPanel;
+        _settingsPopup.CustomPopupPlacementCallback = PlaceSettings;
+        _settingsPopup.Opened += (_, _) => RaisePanelAboveOverlay();
     }
 
     // The overlay window is topmost, so the panel has to be raised as well: a plain popup would
     // otherwise be drawn underneath the card wherever the two overlap.
     private void RaisePanelAboveOverlay()
     {
-        if (_panel is null || PresentationSource.FromVisual(_panel) is not HwndSource source)
+        foreach (var panel in new[] { _panel, _settingsPanel })
         {
-            return;
+            if (panel is not null && PresentationSource.FromVisual(panel) is HwndSource source)
+            {
+                Win32.RaiseWithoutActivating(source.Handle);
+            }
         }
-
-        Win32.RaiseWithoutActivating(source.Handle);
     }
 
     private void ShowPanel()
@@ -177,21 +202,58 @@ public partial class MainWindow : Window
         }
 
         _panel.Fill(_accounts.Load(), AccountIdentity.Read(_codexHome)?.Id, _settings, Autostart.IsEnabled());
+        _settingsPopup.IsOpen = false;
+        _panelAnchor = null;
+        _settingsAnchor = null;
         RaiseTopmost();
         _popup.IsOpen = true;
+    }
+
+    // 设置 in the card unfolds the second layer; the same row puts it away again. Neither card
+    // moves while that happens.
+    private void ToggleSettingsLayer()
+    {
+        if (_settingsPanel is null)
+        {
+            return;
+        }
+
+        if (_settingsPopup.IsOpen)
+        {
+            _settingsPopup.IsOpen = false;
+            return;
+        }
+
+        _settingsPanel.Fill(_accounts.Load(), AccountIdentity.Read(_codexHome)?.Id, _settings, Autostart.IsEnabled());
+        _settingsAnchor = null;
+        _settingsPopup.IsOpen = true;
     }
 
     // The card is parked at the screen's right end, so the panel opens up and to the left of the
     // cursor. These offsets are relative to the card, so negative coordinates are normal.
     private CustomPopupPlacement[] PlacePanel(Size popup, Size target, Point offset)
     {
-        var cursor = System.Windows.Input.Mouse.GetPosition(this);
-        return
-        [
-            new CustomPopupPlacement(
-                new Point(cursor.X - popup.Width + 10, cursor.Y - popup.Height - 10),
-                PopupPrimaryAxis.Horizontal)
-        ];
+        if (_panelAnchor is null)
+        {
+            var cursor = System.Windows.Input.Mouse.GetPosition(this);
+            _panelAnchor = new Point(cursor.X - popup.Width + 10, cursor.Y - popup.Height - 10);
+        }
+
+        return [new CustomPopupPlacement(_panelAnchor.Value, PopupPrimaryAxis.Horizontal)];
+    }
+
+    // The settings layer sits against the right edge of the card it was opened from, sharing its
+    // bottom: the two rise from the cursor together. Anchored once, like the card itself.
+    private CustomPopupPlacement[] PlaceSettings(Size popup, Size target, Point offset)
+    {
+        if (_settingsAnchor is null)
+        {
+            var cursor = System.Windows.Input.Mouse.GetPosition(this);
+            var height = _panel?.ActualHeight ?? popup.Height;
+            _settingsAnchor = new Point(cursor.X + 18, cursor.Y - height - 10);
+        }
+
+        return [new CustomPopupPlacement(_settingsAnchor.Value, PopupPrimaryAxis.Horizontal)];
     }
 
     private void CheckPanelDismiss()
@@ -208,20 +270,29 @@ public partial class MainWindow : Window
     }
 
     // The panel is a window of its own, so its rectangle and the cursor are both read in raw
-    // screen pixels - no DPI conversion between the two.
+    // screen pixels - no DPI conversion between the two. Both layers count: a press in the settings
+    // layer belongs to the panel, not to the desktop.
     private bool CursorInsidePanel()
     {
-        if (_panel is null || PresentationSource.FromVisual(_panel) is not HwndSource source)
-        {
-            return false;
-        }
-
-        if (!Win32.TryWindowRect(source.Handle, out var rect) || !Win32.TryCursor(out var cursor))
+        if (!Win32.TryCursor(out var cursor))
         {
             return true;
         }
 
-        return cursor.X >= rect.Left && cursor.X < rect.Right && cursor.Y >= rect.Top && cursor.Y < rect.Bottom;
+        return Inside(_panel, cursor) || Inside(_settingsPanel, cursor);
+    }
+
+    private static bool Inside(FrameworkElement? panel, Win32.Point cursor)
+    {
+        if (panel is null || PresentationSource.FromVisual(panel) is not HwndSource source)
+        {
+            return false;
+        }
+
+        // A rectangle that cannot be read counts as inside: a transient failure must not close a
+        // panel the user is working in.
+        return !Win32.TryWindowRect(source.Handle, out var rect)
+            || (cursor.X >= rect.Left && cursor.X < rect.Right && cursor.Y >= rect.Top && cursor.Y < rect.Bottom);
     }
 
     // ---------------------------------------------------------------- reading

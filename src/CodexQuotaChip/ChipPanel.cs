@@ -27,14 +27,14 @@ public sealed class ChipPanel : Border
 
     private static readonly FontFamily UiFont = new(TextDrawing.UiFont);
 
-    // Two columns side by side: the accounts (and the two things you reach for) on the left, the
-    // settings on the right. The right column is folded away until 设置 is clicked, and clicking it
-    // again puts it away - no back row, because nothing was left behind.
     private readonly StackPanel _rows = new();
-    private readonly StackPanel _settingRows = new();
-    private readonly Border _settingsColumn;
 
-    // What the last Fill was told, so the settings column can rebuild itself without asking again.
+    // The same class draws both layers: the card itself, and the settings layer that opens beside
+    // it. The settings get a layer of their own so that unfolding them cannot resize - and so
+    // cannot move - the card they were opened from.
+    private readonly bool _settingsOnly;
+
+    // What the last Fill was told, so the settings layer can rebuild itself without asking again.
     private IReadOnlyList<AccountRecord> _accounts = [];
     private string? _currentId;
     private Settings _settings = new();
@@ -43,6 +43,7 @@ public sealed class ChipPanel : Border
     private readonly Func<bool> _toggleAutostart;
     private readonly Func<bool> _toggleNotifications;
     private readonly Func<bool> _togglePlate;
+    private readonly Action _openSettings;
     private readonly Action<int> _setRefreshSeconds;
     private readonly Action<string> _setDisplaySide;
     private readonly Action _exit;
@@ -54,14 +55,18 @@ public sealed class ChipPanel : Border
         Func<bool> togglePlate,
         Action<int> setRefreshSeconds,
         Action<string> setDisplaySide,
-        Action exit)
+        Action openSettings,
+        Action exit,
+        bool settingsOnly = false)
     {
+        _settingsOnly = settingsOnly;
         _refresh = refresh;
         _toggleAutostart = toggleAutostart;
         _toggleNotifications = toggleNotifications;
         _togglePlate = togglePlate;
         _setRefreshSeconds = setRefreshSeconds;
         _setDisplaySide = setDisplaySide;
+        _openSettings = openSettings;
         _exit = exit;
 
         Background = new SolidColorBrush(Theme.Panel.Background);
@@ -73,30 +78,9 @@ public sealed class ChipPanel : Border
         // grey block behind the card rather than as a transparent corner.
         // The panel grows with the number of accounts, so keep it on screen and let it scroll.
         MaxHeight = Math.Max(240, SystemParameters.WorkArea.Height - 80);
-
-        // The hairline is the column boundary: nothing is drawn between the accounts and the card's
-        // own edge, and the settings get a little air on their side of it.
-        _settingsColumn = new Border
-        {
-            BorderBrush = new SolidColorBrush(Theme.Panel.Outline),
-            BorderThickness = new Thickness(1, 0, 0, 0),
-            Padding = new Thickness(12, 0, 0, 0),
-            Margin = new Thickness(12, 4, 0, 4),
-            Child = _settingRows,
-            Visibility = Visibility.Collapsed
-        };
-
-        var columns = new Grid();
-        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        columns.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        Grid.SetColumn(_rows, 0);
-        Grid.SetColumn(_settingsColumn, 1);
-        columns.Children.Add(_rows);
-        columns.Children.Add(_settingsColumn);
-
         Child = new ScrollViewer
         {
-            Content = columns,
+            Content = _rows,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled
         };
@@ -110,9 +94,13 @@ public sealed class ChipPanel : Border
         _currentId = currentId;
         _settings = settings;
         _autostart = autostart;
-        _settingsColumn.Visibility = Visibility.Collapsed;
+        if (_settingsOnly)
+        {
+            BuildSettings();
+            return;
+        }
+
         BuildAccounts();
-        BuildSettings();
     }
 
     // Accounts first, then the two things worth reaching for. Everything that is a setting lives
@@ -154,29 +142,22 @@ public sealed class ChipPanel : Border
 
         _rows.Children.Add(Divider());
         _rows.Children.Add(CommandRow("刷新（或点状态栏数据）", _refresh));
-        _rows.Children.Add(CommandRow("设置 ›", ToggleSettings));
+        _rows.Children.Add(CommandRow("设置 ›", _openSettings));
         _rows.Children.Add(Divider());
         _rows.Children.Add(CommandRow("退出", _exit, danger: true));
     }
 
     private void BuildSettings()
     {
-        _settingRows.Children.Clear();
-        _settingRows.Children.Add(SettingRow("刷新间隔", IntervalPicker(_settings.RefreshSeconds)));
-        _settingRows.Children.Add(SettingRow("显示位置", new Segmented(
+        _rows.Children.Clear();
+        _rows.Children.Add(SettingRow("刷新间隔", IntervalPicker(_settings.RefreshSeconds)));
+        _rows.Children.Add(SettingRow("显示位置", new Segmented(
             ["左", "右"], _settings.DisplayLeft ? 0 : 1, index => _setDisplaySide(index == 0 ? "left" : "right"))));
         // The plate the overlay draws under itself: same idea as this panel's own background.
-        _settingRows.Children.Add(SwitchRow("黑色底图", _settings.Plate, _togglePlate));
-        _settingRows.Children.Add(AutostartRow(_autostart));
-        _settingRows.Children.Add(SwitchRow("额度重置时通知", _settings.NotifyOnReset, _toggleNotifications));
+        _rows.Children.Add(SwitchRow("黑色底图", _settings.Plate, _togglePlate));
+        _rows.Children.Add(AutostartRow(_autostart));
+        _rows.Children.Add(SwitchRow("额度重置时通知", _settings.NotifyOnReset, _toggleNotifications));
     }
-
-    // The card itself stays put: the settings column simply unfolds to the right of the accounts,
-    // and folds away again on the next click.
-    private void ToggleSettings() =>
-        _settingsColumn.Visibility = _settingsColumn.Visibility == Visibility.Visible
-            ? Visibility.Collapsed
-            : Visibility.Visible;
 
     private Segmented IntervalPicker(int currentSeconds)
     {
