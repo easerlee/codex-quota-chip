@@ -41,6 +41,6 @@
   ],
   "codexQuotaChip": {
     "_comment": "sha256 of CodexQuotaChip-<version>-win-x64.zip on the matching GitHub release. Bump it together with version, or the install refuses to run the download.",
-    "sha256": "f875fbcd7b24db7aaace2f62e1b92b376b1a3ccd82d44b03a93eb833ed897c17"
+    "sha256": "04778d88f4acf9b55a9158e7690f32e668f6c7e68a94a615dccbe638bc02d5d4"
   }
 }
