@@ -16,6 +16,7 @@ var tests = new (string Name, Action Body)[]
     ("the light follows the link, not the login", TestFreshness),
     ("the strip is measured from its longest line", TestStripWidth),
     ("a window that ran out of time is reported once", TestRefillWatch),
+    ("the panel's background is opaque", TestPanelIsOpaque),
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
@@ -502,6 +503,13 @@ static void TestRefillWatch()
     // What the app writes back when it reports one - full, with the reset time dropped - is what
     // keeps the same window from being reported again.
     Equal(false, ResetWatch.Refilled(100, null, now), "a reported refill is not reported again");
+}
+
+static void TestPanelIsOpaque()
+{
+    // It used to be #F0141619 - 6% transparent, which let the desktop read through the panel and
+    // looked like a rendering fault over a light window.
+    Equal((byte)255, Theme.Panel.Background.A, "the panel's own background is opaque");
 }
 
 static void Equal<T>(T expected, T actual, string what)

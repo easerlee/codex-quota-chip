@@ -173,7 +173,9 @@ public partial class MainWindow : Window
         // and it counts both rectangles as inside.
         _popup.StaysOpen = true;
         _popup.AllowsTransparency = true;
-        _popup.PopupAnimation = PopupAnimation.Fade;
+        // No fade: a menu should be there as soon as it is asked for, and a fade that gets stuck
+        // leaves the whole panel half transparent.
+        _popup.PopupAnimation = PopupAnimation.None;
         _popup.Child = _panel;
         _popup.CustomPopupPlacementCallback = PlacePanel;
         _popup.Opened += (_, _) =>
@@ -197,7 +199,7 @@ public partial class MainWindow : Window
         _settingsPopup.Placement = PlacementMode.Custom;
         _settingsPopup.StaysOpen = true;
         _settingsPopup.AllowsTransparency = true;
-        _settingsPopup.PopupAnimation = PopupAnimation.Fade;
+        _settingsPopup.PopupAnimation = PopupAnimation.None;
         _settingsPopup.Child = _settingsPanel;
         _settingsPopup.CustomPopupPlacementCallback = PlaceSettings;
         _settingsPopup.Opened += (_, _) => RaisePanelAboveOverlay();

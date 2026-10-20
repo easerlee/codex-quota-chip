@@ -55,7 +55,9 @@ public static class Theme
 
     public static class Panel
     {
-        public static Color Background => Hex("#F0141619");
+        // Opaque on purpose: #F0141619 left 6% of whatever is behind it showing through, which is
+        // invisible over a dark desktop and reads as a ghost of the chat window over a light one.
+        public static Color Background => Hex("#FF141619");
 
         public static Color Outline => Hex("#33FFFFFF");
 
