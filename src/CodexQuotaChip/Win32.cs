@@ -238,11 +238,14 @@ public static class Win32
             SwpNoMove | SwpNoSize | SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder);
     }
 
+    // A placement only moves and resizes. It must not touch the z-order: HWND_TOPMOST without
+    // SWP_NOZORDER also re-tops the card, which put it back above the right-click panel that had
+    // just been raised on purpose - the panel stayed underneath until it was closed.
     public static void PlaceWithoutActivating(IntPtr hwnd, WindowPlacement placement)
     {
         hwnd = RootWindow(hwnd);
-        SetWindowPos(hwnd, HwndTopmost, placement.X, placement.Y, placement.Width, placement.Height,
-            SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder);
+        SetWindowPos(hwnd, IntPtr.Zero, placement.X, placement.Y, placement.Width, placement.Height,
+            SwpNoZOrder | SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder);
     }
 
     private static IntPtr GetWindowLongPtrValue(IntPtr hwnd, int index) =>
