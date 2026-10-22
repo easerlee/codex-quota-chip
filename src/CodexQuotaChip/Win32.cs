@@ -161,15 +161,19 @@ public static class Win32
 
     public static IntPtr TaskbarWindow() => FindWindowW("Shell_TrayWnd", null);
 
-    // Left edge of the right-hand cluster on the primary taskbar: the notification area, or the
-    // widget pill Windows 11 draws in front of it. The pill is not a window, so UIAutomation is
-    // asked for its rectangle, and the answer is cached - this runs on the placement timer.
-    public static int TrayLeftEdge()
+    // Both ends of the taskbar as the shell lays them out: where the right-hand cluster starts (the
+    // tray, or the widget pill Windows 11 draws in front of it) and where the left-hand one ends
+    // (the app buttons, or 0 on a centred taskbar whose far left is empty). Neither the pill nor that
+    // edge is a window, so UIAutomation is asked - cached, and re-asked when the tray moves or the
+    // widget switch changes.
+    public readonly record struct TaskbarAnchors(int RightLeft, int LeftRight);
+
+    public static TaskbarAnchors Anchors(bool wait = false)
     {
         var taskbar = TaskbarWindow();
         if (taskbar == IntPtr.Zero)
         {
-            return 0;
+            return default;
         }
 
         var tray = FindWindowExW(taskbar, IntPtr.Zero, "TrayNotifyWnd", null);
@@ -177,57 +181,79 @@ public static class Win32
             ? trayRect.Left
             : 0;
 
-        var pill = PillLeftEdge(taskbar, trayLeft);
-        return pill > 0 ? pill : trayLeft;
+        if (wait)
+        {
+            var task = Task.Run(() => QueryAnchors(taskbar, trayLeft));
+            task.Wait(2000);
+            if (task.IsCompletedSuccessfully)
+            {
+                _anchors = task.Result;
+                _anchorTrayLeft = trayLeft;
+                _anchorWidgets = WidgetsEnabled();
+                _anchorAt = Environment.TickCount64;
+            }
+
+            return _anchors;
+        }
+
+        return Cached(taskbar, trayLeft);
     }
 
-    private const int PillCacheMs = 3000;
-    private static int _pillCache;
-    private static int _pillTrayLeft;
-    private static long _pillAt;
-    private static int _pillBusy;
+    // The widget switch is the one thing that changes this layout without moving a window, so it is
+    // read on every placement - it costs 0.14 ms, against 20 ms for the UIAutomation query.
+    private static int WidgetsEnabled()
+    {
+        using var advanced = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+            @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced");
+        return advanced?.GetValue("TaskbarDa") as int? ?? 1;
+    }
+
+    private const int AnchorCacheMs = 30_000;
+    private static TaskbarAnchors _anchors;
+    private static int _anchorTrayLeft;
+    private static int? _anchorWidgets;
+    private static long _anchorAt;
+    private static int _anchorBusy;
 
     // UIAutomation wants an MTA apartment, and the placement timer runs on WPF's STA thread where the
     // query comes back empty. So the question is asked on a thread of its own and the answer is
-    // cached; this call always uses whatever the last answer was, and 0 means "not known yet".
-    private static int PillLeftEdge(IntPtr taskbar, int trayLeft)
+    // cached; this call uses whatever the last answer was.
+    private static TaskbarAnchors Cached(IntPtr taskbar, int trayLeft)
     {
-        if (trayLeft <= 0)
+        var widgets = WidgetsEnabled();
+        if (trayLeft == _anchorTrayLeft
+            && widgets == _anchorWidgets
+            && Environment.TickCount64 - _anchorAt < AnchorCacheMs)
         {
-            return 0;
+            return _anchors;
         }
 
-        if (trayLeft != _pillTrayLeft)
+        if (Interlocked.Exchange(ref _anchorBusy, 1) == 0)
         {
-            _pillCache = 0;
-            _pillTrayLeft = trayLeft;
-            _pillAt = 0;
-        }
-
-        if (Environment.TickCount64 - _pillAt >= PillCacheMs && Interlocked.Exchange(ref _pillBusy, 1) == 0)
-        {
+            _anchorTrayLeft = trayLeft;
+            _anchorWidgets = widgets;
             _ = Task.Run(() =>
             {
                 try
                 {
-                    _pillCache = QueryPill(taskbar, trayLeft);
+                    _anchors = QueryAnchors(taskbar, trayLeft);
                 }
                 catch (Exception)
                 {
-                    _pillCache = 0;
+                    // No automation, no answer: the tray's own edge is the old behaviour and works.
                 }
                 finally
                 {
-                    _pillAt = Environment.TickCount64;
-                    Interlocked.Exchange(ref _pillBusy, 0);
+                    _anchorAt = Environment.TickCount64;
+                    Interlocked.Exchange(ref _anchorBusy, 0);
                 }
             });
         }
 
-        return _pillCache;
+        return _anchors;
     }
 
-    private static int QueryPill(IntPtr taskbar, int trayLeft)
+    private static TaskbarAnchors QueryAnchors(IntPtr taskbar, int trayLeft)
     {
         var bar = System.Windows.Automation.AutomationElement.FromHandle(taskbar);
         var found = bar?.FindAll(
@@ -238,7 +264,7 @@ public static class Win32
 
         if (found is null)
         {
-            return 0;
+            return new TaskbarAnchors(trayLeft, 0);
         }
 
         var buttons = new List<(int Left, int Right, bool TaskList)>();
@@ -249,7 +275,8 @@ public static class Win32
             buttons.Add(((int)rect.Left, (int)rect.Right, taskList));
         }
 
-        return Placement.PillLeftEdge(trayLeft, buttons);
+        var pill = Placement.PillLeftEdge(trayLeft, buttons);
+        return new TaskbarAnchors(pill > 0 ? pill : trayLeft, Placement.TaskListRightEdge(buttons));
     }
 
     public static bool TryTaskbarRect(out Rect rect)

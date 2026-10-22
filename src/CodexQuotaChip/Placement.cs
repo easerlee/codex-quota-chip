@@ -49,21 +49,21 @@ public static class Placement
         int fallbackHeight,
         int screenWidth,
         int screenHeight,
-        int trayLeft,
+        int rightClusterLeft,
+        int leftClusterRight,
         bool pinLeft = false)
     {
         if (edge is EdgeTop or EdgeBottom && !taskbar.IsEmpty)
         {
             var width = Math.Min(Math.Max(1, preferredWidth), taskbar.Width);
 
-            // Right (the default) sits immediately left of the notification area, so a
-            // left-aligned taskbar keeps its Start button clear. Left is the taskbar's own far
-            // end, which is the empty one on a Windows 11 centre-aligned taskbar. If the tray is
-            // unknown, or there is no room beside it, the taskbar's left edge is the fallback.
+            // Right (the default) sits left of the notification area - or of the widget pill in front
+            // of it. Left is the far end, past whatever is parked there already: the Start button and
+            // the app buttons on a left-aligned taskbar, nothing at all on a centred one.
             var x = pinLeft
-                ? taskbar.Left + Gap
-                : trayLeft > taskbar.Left + width + Gap
-                    ? trayLeft - width - Gap
+                ? Math.Max(taskbar.Left, leftClusterRight) + Gap
+                : rightClusterLeft > taskbar.Left + width + Gap
+                    ? rightClusterLeft - width - Gap
                     : taskbar.Left;
 
             return Clamp(new WindowPlacement(x, taskbar.Top, width, taskbar.Height), screenWidth, screenHeight);
@@ -71,6 +71,22 @@ public static class Placement
 
         // A vertical taskbar leaves no sensible strip: fall back to the bottom-left corner.
         return Fallback(preferredWidth, fallbackHeight, screenWidth, screenHeight);
+    }
+
+    // Where the left-hand cluster ends: the right edge of the app buttons, or 0 when there are none
+    // (a centred taskbar keeps its far left empty).
+    public static int TaskListRightEdge(IReadOnlyList<(int Left, int Right, bool TaskList)> buttons)
+    {
+        var right = 0;
+        foreach (var button in buttons)
+        {
+            if (button.TaskList)
+            {
+                right = Math.Max(right, button.Right);
+            }
+        }
+
+        return right;
     }
 
     public static WindowPlacement Fallback(int preferredWidth, int height, int screenWidth, int screenHeight) =>

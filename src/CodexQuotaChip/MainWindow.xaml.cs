@@ -763,11 +763,12 @@ public partial class MainWindow : Window
         return (int)Math.Ceiling(Math.Max(DefaultWidth, (StripMarginX * 2) + content + 1));
     }
 
-    public static WindowPlacement ResolvePlacement(int preferredWidth, bool pinLeft)
+    public static WindowPlacement ResolvePlacement(int preferredWidth, bool pinLeft, bool waitForAnchors = false)
     {
         var monitor = Win32.MonitorBounds(IntPtr.Zero);
         if (Win32.TryTaskbarRect(out var taskbar))
         {
+            var anchors = Win32.Anchors(waitForAnchors);
             return Placement.Compute(
                 Placement.InferEdge(taskbar, monitor.Width, monitor.Height),
                 taskbar,
@@ -775,7 +776,8 @@ public partial class MainWindow : Window
                 DefaultHeight,
                 monitor.Width,
                 monitor.Height,
-                Win32.TrayLeftEdge(),
+                anchors.RightLeft,
+                anchors.LeftRight,
                 pinLeft);
         }
 

@@ -84,7 +84,7 @@ public partial class App : Application
         // The width the overlay works out for itself, 1.0 pixels per dip because there is no window
         // here to ask and the taskbar sits on the primary monitor.
         var width = CodexQuotaChip.MainWindow.StripWidth(1.0);
-        var placement = CodexQuotaChip.MainWindow.ResolvePlacement(width, false);
+        var placement = CodexQuotaChip.MainWindow.ResolvePlacement(width, false, waitForAnchors: true);
         Console.WriteLine($"state   : {paths.Root}");
         Console.WriteLine($"settings: {paths.Settings}");
         Console.WriteLine($"codex   : {codexHome}");

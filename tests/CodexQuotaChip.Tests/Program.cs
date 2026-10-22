@@ -254,27 +254,32 @@ static void TestPlacement()
 
     Equal(
         new WindowPlacement(1232, 1032, 260, 48),
-        Placement.Compute(Placement.EdgeBottom, bottom, 260, 48, 1920, 1080, trayLeft: 1500),
+        Placement.Compute(Placement.EdgeBottom, bottom, 260, 48, 1920, 1080, rightClusterLeft: 1500, leftClusterRight: 0),
         "the tray side sits immediately left of the notification area");
 
     Equal(
         new WindowPlacement(Placement.Gap, 1032, 260, 48),
-        Placement.Compute(Placement.EdgeBottom, bottom, 260, 48, 1920, 1080, trayLeft: 1500, pinLeft: true),
-        "the left side sits at the taskbar's own left end");
+        Placement.Compute(Placement.EdgeBottom, bottom, 260, 48, 1920, 1080, rightClusterLeft: 1500, leftClusterRight: 0, pinLeft: true),
+        "the left side sits at the taskbar's own left end when that end is empty");
+
+    Equal(
+        new WindowPlacement(828, 1032, 260, 48),
+        Placement.Compute(Placement.EdgeBottom, bottom, 260, 48, 1920, 1080, rightClusterLeft: 1500, leftClusterRight: 820, pinLeft: true),
+        "the left side starts after the app buttons instead of covering them");
 
     Equal(
         new WindowPlacement(0, 1032, 260, 48),
-        Placement.Compute(Placement.EdgeBottom, bottom, 260, 48, 1920, 1080, trayLeft: 0),
+        Placement.Compute(Placement.EdgeBottom, bottom, 260, 48, 1920, 1080, rightClusterLeft: 0, leftClusterRight: 0),
         "with no tray geometry the tray side falls back to the taskbar's left edge");
 
     Equal(
         new WindowPlacement(0, 1032, 260, 48),
-        Placement.Compute(Placement.EdgeLeft, new Win32.Rect { Left = 0, Top = 0, Right = 48, Bottom = 1080 }, 260, 48, 1920, 1080, 0),
+        Placement.Compute(Placement.EdgeLeft, new Win32.Rect { Left = 0, Top = 0, Right = 48, Bottom = 1080 }, 260, 48, 1920, 1080, 0, 0),
         "a vertical taskbar falls back to the bottom-left corner");
 
     Equal(
         new WindowPlacement(1660, 1032, 260, 48),
-        Placement.Compute(Placement.EdgeBottom, bottom, 260, 48, 1920, 1080, trayLeft: 5000),
+        Placement.Compute(Placement.EdgeBottom, bottom, 260, 48, 1920, 1080, rightClusterLeft: 5000, leftClusterRight: 0),
         "an off-screen anchor is clamped back onto the monitor");
 }
 
