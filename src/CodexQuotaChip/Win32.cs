@@ -140,6 +140,12 @@ public static class Win32
     [DllImport("user32.dll")]
     private static extern IntPtr WindowFromPoint(Point point);
 
+    [DllImport("user32.dll")]
+    private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr parameter);
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hwnd);
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr CreateMutexW(IntPtr attributes, bool initialOwner, string name);
 
@@ -375,6 +381,44 @@ public static class Win32
         {
             RaiseWithoutActivating(hwnd);
         }
+    }
+
+    // The shell's own menus and flyouts are windows of their own, and they are what the card must
+    // never cover: Win11 draws them as Xaml_WindowedPopupClass, a classic menu is #32768, and the
+    // overflow island is named after itself. Their z-order cannot be relied on - a card raised to
+    // the top of the topmost band ends up *above* a menu that was inserted just above the bar, which
+    // is exactly the "额度条压在任务管理器上" screenshot. So the card steps aside instead: while one
+    // of them is over the strip it is hidden, and it comes back when the menu closes.
+    public static bool ShellMenuOver(IntPtr hwnd, Rect strip)
+    {
+        var found = false;
+        EnumWindows((window, _) =>
+        {
+            if (found || window == hwnd || !IsWindowVisible(window)
+                || !GetWindowRect(window, out var box) || box.IsEmpty)
+            {
+                return !found;
+            }
+
+            var name = WindowClass(window);
+            if (name != "#32768"
+                && !name.StartsWith("Xaml_WindowedPopupClass", StringComparison.Ordinal)
+                && !name.StartsWith("TopLevelWindowForOverflowXamlIsland", StringComparison.Ordinal))
+            {
+                return true;
+            }
+
+            if (box.Left >= strip.Right || box.Right <= strip.Left
+                || box.Top >= strip.Bottom || box.Bottom <= strip.Top)
+            {
+                return true;
+            }
+
+            found = true;
+            return false;
+        }, IntPtr.Zero);
+
+        return found;
     }
 
     // A placement only moves and resizes. It must not touch the z-order: HWND_TOPMOST without

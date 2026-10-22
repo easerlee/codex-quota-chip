@@ -60,7 +60,7 @@ public partial class MainWindow : Window
     private bool _pendingRead;
     private bool _panelOpen;
     private bool _menuButtonWasUp = true;
-    private bool _parked;
+    private bool _steppedAside;
     private bool _closing;
 
     public MainWindow(Paths paths, string codexHome, Settings settings, Log log, CodexExe codexExe)
@@ -710,9 +710,9 @@ public partial class MainWindow : Window
 
     private void Snap()
     {
-        // While parked the placement timer must not move the window, not even when the taskbar
-        // itself comes back - the visibility timer is what brings it out again.
-        if (_parked)
+        // While stepped aside the placement timer must not move the window, not even when the
+        // taskbar comes back - the visibility timer is what brings it out again.
+        if (_steppedAside)
         {
             return;
         }
@@ -787,26 +787,34 @@ public partial class MainWindow : Window
 
     private void UpdateVisibility()
     {
-        if (IsParked())
+        // Three things take the strip away from under the card: a fullscreen app in front, an
+        // auto-hidden bar sliding off the screen, and a shell menu opening over it. All are answered
+        // the same way - step aside, come back when they are gone.
+        if (IsParked() || IsMenuOver())
         {
-            if (!_parked)
+            if (!_steppedAside)
             {
-                _parked = true;
+                _steppedAside = true;
                 Hide();
             }
 
             return;
         }
 
-        if (_parked)
+        if (_steppedAside)
         {
-            _parked = false;
+            _steppedAside = false;
             Show();
             Snap();
         }
 
         KeepWithTaskbar();
     }
+
+    private bool IsMenuOver() =>
+        _handle != IntPtr.Zero
+        && Win32.TryWindowRect(_handle, out var strip)
+        && Win32.ShellMenuOver(_handle, strip);
 
     // Two things take the taskbar away from under the overlay: a fullscreen app in front, and an
     // auto-hidden bar sliding off the screen. Both are answered the same way - step aside, come back
