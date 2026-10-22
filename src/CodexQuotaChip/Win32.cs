@@ -27,9 +27,6 @@ public static class Win32
     public const int VkRightButton = 0x02;
     public const int ErrorAlreadyExists = 183;
 
-    // GetWindow: the window directly behind the one asked about.
-    public const uint GwHwndNext = 2;
-
     public static readonly IntPtr HwndTopmost = new(-1);
 
     public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr parameter);
@@ -349,41 +346,18 @@ public static class Win32
         SetWindowLongPtrValue(hwnd, GwlpHwndParent, (int)taskbar);
     }
 
-    // 层级只有一条规则：任务栏 < 浮窗 < 菜单，各差一层。
+    // 层级只有一条规则：任务栏 < 浮窗 < 菜单。
     //
-    // 浮窗用「插到任务栏正上方」，位置关系是确定的：比任务栏低就被它盖住，比它高就看得见，
-    // 谁刷新都不会把顺序换过来（不用「提到最顶」，那会连系统菜单一起压）。
+    // 浮窗必须提到置顶带最上层 —— 这一条是试出来的，不是设计出来的：Windows 11 的任务栏不是
+    // 一个窗口画出来的，Shell_TrayWnd 之上还摞着 XAML 岛（SoPY_* 那些）。「插到 Shell_TrayWnd
+    // 正上方」听起来更精确，实际落在那几个岛下面，整块看不见（0.2.21 / 0.2.25 两次都是这么丢的）。
+    //
+    // 提到最顶的代价是可能压住系统菜单 —— 但菜单压过来时浮窗直接让位（见 ShellMenuOver），
+    // 所以这条路径上不存在「浮窗盖住菜单」的稳定状态。
     public static void RaiseToTop(IntPtr hwnd)
     {
         SetWindowPos(RootWindow(hwnd), HwndTopmost, 0, 0, 0, 0,
             SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
-    }
-
-    public static void RideAbove(IntPtr hwnd, IntPtr below)
-    {
-        hwnd = RootWindow(hwnd);
-        below = RootWindow(below);
-        if (hwnd == IntPtr.Zero || below == IntPtr.Zero || GetWindow(hwnd, GwHwndNext) == below)
-        {
-            return;
-        }
-
-        // No SWP_SHOWWINDOW here: the card is hidden on purpose while a fullscreen app owns the
-        // screen, and a z-order move must never be what brings it back.
-        SetWindowPos(hwnd, below, 0, 0, 0, 0,
-            SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
-    }
-
-    // The card sits one layer above the bar. Anything else the shell puts above the bar (its own
-    // menus) lands underneath the card by this rule - which is why a menu over the strip makes the
-    // card step aside instead of arguing about z-order.
-    public static void RideAboveTaskbar(IntPtr hwnd)
-    {
-        var taskbar = TaskbarWindow();
-        if (taskbar != IntPtr.Zero)
-        {
-            RideAbove(hwnd, taskbar);
-        }
     }
 
     // The shell's own menus and flyouts are windows of their own, and they are what the card must

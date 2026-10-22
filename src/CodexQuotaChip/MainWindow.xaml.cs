@@ -183,7 +183,7 @@ public partial class MainWindow : Window
             // The panel is opened by a button release, so the next press is a fresh one.
             _menuButtonWasUp = true;
             _panelGuard.Start();
-            RaisePanels();
+            ApplyLayers();
             KeepWithTaskbar();
         };
         _popup.Closed += (_, _) =>
@@ -201,11 +201,31 @@ public partial class MainWindow : Window
         _settingsPopup.PopupAnimation = PopupAnimation.None;
         _settingsPopup.Child = _settingsPanel;
         _settingsPopup.CustomPopupPlacementCallback = PlaceSettings;
-        _settingsPopup.Opened += (_, _) => RaisePanels();
+        _settingsPopup.Opened += (_, _) => ApplyLayers();
     }
 
-    // 层级的第二格：菜单在浮窗上面一格。面板开着的时候每秒重提一次 —— 浮窗是被任务栏拥有的窗口，
-    // 任务栏一刷新就可能把它连人带面板一起甩上去，而面板是我们自己的窗口，提回最上面不跟任何人抢。
+    // 层级只有一条规则，而且每次都从头落实：先把浮窗提到最上，再把菜单提到浮窗之上。
+    // 「同一次调用、先卡片后面板」才是保证 —— 顺序在调用里定死，就不存在谁先把谁顶上去的问题；
+    // 之前那一版分两个分支走，只要有一次走错分支（比如面板开着却读到「没开」），卡片就会压上去。
+    private void ApplyLayers()
+    {
+        if (_handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        // 系统菜单压过来时不提卡片：那一刻它马上要被让位逻辑藏起来，提上去只会盖住菜单。
+        if (!IsMenuOver())
+        {
+            Win32.RaiseToTop(_handle);
+        }
+
+        if (_popup.IsOpen || _settingsPopup.IsOpen)
+        {
+            RaisePanels();
+        }
+    }
+
     private void RaisePanels()
     {
         foreach (var panel in new[] { _panel, _settingsPanel })
@@ -690,8 +710,8 @@ public partial class MainWindow : Window
 
     private void OnRightClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => ShowPanel();
 
-    // 层级规则的另一半在 Snap 里：菜单开着时只提菜单，浮窗不动。这里不改层级，
-    // 只把窗口收编成任务栏的从属窗口，让它跟着任务栏走。
+    // 这里不改层级（层级只有 ApplyLayers 一个实现点），只把窗口收编成任务栏的从属窗口，
+    // 让它跟着任务栏走。
     private void KeepWithTaskbar()
     {
         if (_handle == IntPtr.Zero)
@@ -701,7 +721,6 @@ public partial class MainWindow : Window
 
         Win32.MakeOverlayWindow(_handle);
         Win32.Own(new TaskbarOwner(_handle));
-        Win32.RideAboveTaskbar(_handle);
     }
 
     private void Snap()
@@ -727,16 +746,8 @@ public partial class MainWindow : Window
             return;
         }
 
-        // 每秒按规则重排一次层级：浮窗插在任务栏正上方；菜单开着的时候只提菜单，浮窗不动。
-        // 两边分开，是因为菜单必须一直在浮窗之上，而浮窗只要在任务栏之上就够。
-        if (_panelOpen || _settingsPopup.IsOpen)
-        {
-            RaisePanels();
-        }
-        else
-        {
-            Win32.RideAboveTaskbar(_handle);
-        }
+        // 每拍从头落实层级：先浮窗，后面板。这就是那条规则的唯一实现点。
+        ApplyLayers();
 
         if (Win32.TryWindowRect(_handle, out var current) &&
             current.Left == placement.X && current.Top == placement.Y &&
