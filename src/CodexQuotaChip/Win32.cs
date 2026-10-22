@@ -137,6 +137,9 @@ public static class Win32
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out Point point);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr WindowFromPoint(Point point);
+
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr CreateMutexW(IntPtr attributes, bool initialOwner, string name);
 
@@ -345,6 +348,33 @@ public static class Win32
         hwnd = RootWindow(hwnd);
         SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0,
             SwpNoMove | SwpNoSize | SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder);
+    }
+
+    // The taskbar is itself a topmost window, so an overlay merely owned by it is still painted
+    // underneath the bar - and the shell re-tops the bar whenever the taskbar is clicked, which
+    // hides the chip until something raises it again. Raised here only while the *bar* is what
+    // covers the chip's own centre: a menu, a flyout or our own panel sitting there is the shell
+    // showing something on purpose, and covering that is what the old every-500 ms re-raise got
+    // wrong. One cheap WindowFromPoint a second, no fighting.
+    public static void RaiseOverTaskbar(IntPtr hwnd, WindowPlacement placement)
+    {
+        hwnd = RootWindow(hwnd);
+        var at = WindowFromPoint(new Point
+        {
+            X = placement.X + (placement.Width / 2),
+            Y = placement.Y + (placement.Height / 2)
+        });
+
+        if (at == IntPtr.Zero)
+        {
+            return;
+        }
+
+        var root = RootWindow(at);
+        if (root != hwnd && root == TaskbarWindow())
+        {
+            RaiseWithoutActivating(hwnd);
+        }
     }
 
     // A placement only moves and resizes. It must not touch the z-order: HWND_TOPMOST without

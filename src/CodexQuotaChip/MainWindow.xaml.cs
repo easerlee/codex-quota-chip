@@ -690,11 +690,11 @@ public partial class MainWindow : Window
 
     private void OnRightClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => ShowPanel();
 
-    // Z-order policy, in one place: the chip is a tool window owned by the taskbar, so it rides with
-    // the taskbar - above ordinary windows, below the shell's own menus and flyouts. It is
-    // deliberately *not* topmost: a topmost overlay covers the taskbar's context menu, and an overlay
-    // that covers the taskbar's own menu looks broken. The two menus are the only thing raised on
-    // demand, and only once, when they open.
+    // Z-order policy, in one place: the bar is a topmost window, so the chip has to be topmost too
+    // or the bar paints straight over it. Being topmost is not the same as fighting for the top:
+    // the chip is only raised again when the taskbar itself is what covers it (see
+    // Win32.RaiseOverTaskbar), so the shell's menus, flyouts and Start still come up over it. The
+    // two panels are raised once, when they open.
     private void KeepWithTaskbar()
     {
         if (_handle == IntPtr.Zero)
@@ -704,6 +704,8 @@ public partial class MainWindow : Window
 
         Win32.MakeOverlayWindow(_handle);
         Win32.Own(new TaskbarOwner(_handle));
+        // Visible from the first frame: owned by a topmost bar is still painted underneath it.
+        Win32.RaiseWithoutActivating(_handle);
     }
 
     private void Snap()
@@ -728,6 +730,10 @@ public partial class MainWindow : Window
             Top = placement.Y;
             return;
         }
+
+        // The bar re-tops itself on every click and would paint over the chip; this puts the chip
+        // back only while the bar is the thing on top of it, never over an open menu.
+        Win32.RaiseOverTaskbar(_handle, placement);
 
         if (Win32.TryWindowRect(_handle, out var current) &&
             current.Left == placement.X && current.Top == placement.Y &&
