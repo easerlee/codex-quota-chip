@@ -73,6 +73,12 @@ public static class Placement
         return Fallback(preferredWidth, fallbackHeight, screenWidth, screenHeight);
     }
 
+    // With the widget switch on, a snapshot that shows no pill is a snapshot taken mid-redraw - a
+    // click on the taskbar is enough to produce one - not a taskbar without a pill. Keeping the last
+    // answer beats jumping onto the widget and back a second later.
+    public static int KeepPill(int widgets, int measuredPill, int previousPill) =>
+        measuredPill > 0 ? measuredPill : widgets == 1 ? previousPill : 0;
+
     // Where the left-hand cluster ends: the right edge of the app buttons, or 0 when there are none
     // (a centred taskbar keeps its far left empty).
     public static int TaskListRightEdge(IReadOnlyList<(int Left, int Right, bool TaskList)> buttons)

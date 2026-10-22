@@ -19,6 +19,7 @@ var tests = new (string Name, Action Body)[]
     ("the panel's background is opaque", TestPanelIsOpaque),
     ("notifications follow the switches", TestNotificationSwitch),
     ("the widget pill in front of the tray is avoided", TestWidgetPill),
+    ("a redraw without the pill keeps the last one", TestPillKeepsLast),
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
@@ -542,6 +543,15 @@ static void TestWidgetPill()
     Equal(2927, Placement.PillLeftEdge(3091, withPill), "the widget pill is found in front of the tray");
     Equal(0, Placement.PillLeftEdge(3091, [(55, 820, true)]), "no pill means no answer");
     Equal(0, Placement.PillLeftEdge(3091, [(0, 55, false), (55, 820, true)]), "a button far from the tray is not a pill");
+}
+
+static void TestPillKeepsLast()
+{
+    // A taskbar click makes it redraw, and in that snapshot the pill is missing. Treating that as
+    // "no pill" put the card straight onto it, and the 30 second cache kept it there.
+    Equal(2927, Placement.KeepPill(1, 0, 2927), "widgets on and no pill in this snapshot keeps the last one");
+    Equal(2950, Placement.KeepPill(1, 2950, 2927), "a fresh measurement wins");
+    Equal(0, Placement.KeepPill(0, 0, 2927), "widgets off means no pill even if one was seen before");
 }
 
 static void Equal<T>(T expected, T actual, string what)

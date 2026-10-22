@@ -183,13 +183,14 @@ public static class Win32
 
         if (wait)
         {
-            var task = Task.Run(() => QueryAnchors(taskbar, trayLeft));
+            var widgets = WidgetsEnabled();
+            var task = Task.Run(() => QueryAnchors(taskbar, trayLeft, widgets));
             task.Wait(2000);
             if (task.IsCompletedSuccessfully)
             {
                 _anchors = task.Result;
                 _anchorTrayLeft = trayLeft;
-                _anchorWidgets = WidgetsEnabled();
+                _anchorWidgets = widgets;
                 _anchorAt = Environment.TickCount64;
             }
 
@@ -208,12 +209,13 @@ public static class Win32
         return advanced?.GetValue("TaskbarDa") as int? ?? 1;
     }
 
-    private const int AnchorCacheMs = 30_000;
+    private const int AnchorCacheMs = 5_000;
     private static TaskbarAnchors _anchors;
     private static int _anchorTrayLeft;
     private static int? _anchorWidgets;
     private static long _anchorAt;
     private static int _anchorBusy;
+    private static int _pillLeft;
 
     // UIAutomation wants an MTA apartment, and the placement timer runs on WPF's STA thread where the
     // query comes back empty. So the question is asked on a thread of its own and the answer is
@@ -236,7 +238,7 @@ public static class Win32
             {
                 try
                 {
-                    _anchors = QueryAnchors(taskbar, trayLeft);
+                    _anchors = QueryAnchors(taskbar, trayLeft, widgets);
                 }
                 catch (Exception)
                 {
@@ -253,7 +255,7 @@ public static class Win32
         return _anchors;
     }
 
-    private static TaskbarAnchors QueryAnchors(IntPtr taskbar, int trayLeft)
+    private static TaskbarAnchors QueryAnchors(IntPtr taskbar, int trayLeft, int widgets)
     {
         var bar = System.Windows.Automation.AutomationElement.FromHandle(taskbar);
         var found = bar?.FindAll(
@@ -264,7 +266,7 @@ public static class Win32
 
         if (found is null)
         {
-            return new TaskbarAnchors(trayLeft, 0);
+            return new TaskbarAnchors(_pillLeft > 0 ? _pillLeft : trayLeft, 0);
         }
 
         var buttons = new List<(int Left, int Right, bool TaskList)>();
@@ -275,8 +277,10 @@ public static class Win32
             buttons.Add(((int)rect.Left, (int)rect.Right, taskList));
         }
 
-        var pill = Placement.PillLeftEdge(trayLeft, buttons);
-        return new TaskbarAnchors(pill > 0 ? pill : trayLeft, Placement.TaskListRightEdge(buttons));
+        _pillLeft = Placement.KeepPill(widgets, Placement.PillLeftEdge(trayLeft, buttons), _pillLeft);
+        return new TaskbarAnchors(
+            _pillLeft > 0 ? _pillLeft : trayLeft,
+            Placement.TaskListRightEdge(buttons));
     }
 
     public static bool TryTaskbarRect(out Rect rect)
