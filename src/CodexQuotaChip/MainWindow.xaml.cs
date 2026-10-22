@@ -83,7 +83,6 @@ public partial class MainWindow : Window
         // actions have to be a tooltip of their own. The window is not click-through - it keeps the
         // mouse messages it needs for this (and for the panel's click-outside rule).
         _tip = new ToolTip { Content = "左键刷新.右键设置" };
-        _tip.Opened += (_, _) => RaiseTip();
         ToolTip = _tip;
         ToolTipService.SetInitialShowDelay(this, 300);
         ToolTipService.SetShowDuration(this, 10000);
@@ -185,14 +184,14 @@ public partial class MainWindow : Window
             _menuButtonWasUp = true;
             _panelGuard.Start();
             RaisePanelAboveOverlay();
-            RaiseTopmost();
+            KeepWithTaskbar();
         };
         _popup.Closed += (_, _) =>
         {
             _panelOpen = false;
             _panelGuard.Stop();
             _settingsPopup.IsOpen = false;
-            RaiseTopmost();
+            KeepWithTaskbar();
         };
 
         _settingsPopup.PlacementTarget = this;
@@ -229,7 +228,7 @@ public partial class MainWindow : Window
         _settingsPopup.IsOpen = false;
         _panelAnchor = null;
         _settingsAnchor = null;
-        RaiseTopmost();
+        KeepWithTaskbar();
         _popup.IsOpen = true;
     }
 
@@ -658,7 +657,7 @@ public partial class MainWindow : Window
         Win32.MakeOverlayWindow(_handle);
         Win32.Own(new TaskbarOwner(_handle));
         Snap();
-        RaiseTopmost();
+        KeepWithTaskbar();
     }
 
     private void OnClosing(object? sender, CancelEventArgs e)
@@ -685,39 +684,26 @@ public partial class MainWindow : Window
             return;
         }
 
-        RaiseTopmost();
+        KeepWithTaskbar();
         Refresh();
     }
 
     private void OnRightClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => ShowPanel();
 
-    private void RaiseTopmost()
+    // Z-order policy, in one place: the chip is a tool window owned by the taskbar, so it rides with
+    // the taskbar - above ordinary windows, below the shell's own menus and flyouts. It is
+    // deliberately *not* topmost: a topmost overlay covers the taskbar's context menu, and an overlay
+    // that covers the taskbar's own menu looks broken. The two menus are the only thing raised on
+    // demand, and only once, when they open.
+    private void KeepWithTaskbar()
     {
-        if (_panelOpen)
+        if (_handle == IntPtr.Zero)
         {
             return;
         }
 
-        Topmost = true;
-        if (_handle != IntPtr.Zero)
-        {
-            Win32.MakeOverlayWindow(_handle);
-            Win32.RaiseWithoutActivating(_handle);
-        }
-
-        RaiseTip();
-    }
-
-    // The chip is raised twice a second while it sits on the taskbar (UpdateVisibility), and every
-    // one of those raises lands on top of the tooltip - which is why it slid underneath after a
-    // second. So the tooltip goes up again straight after: it is the one thing here that has to
-    // stay above the card.
-    private void RaiseTip()
-    {
-        if (_tip is { IsOpen: true } tip && PresentationSource.FromVisual(tip) is HwndSource source)
-        {
-            Win32.RaiseWithoutActivating(source.Handle);
-        }
+        Win32.MakeOverlayWindow(_handle);
+        Win32.Own(new TaskbarOwner(_handle));
     }
 
     private void Snap()
@@ -804,7 +790,7 @@ public partial class MainWindow : Window
             Snap();
         }
 
-        RaiseTopmost();
+        KeepWithTaskbar();
     }
 
     private bool IsFullscreenForeground()

@@ -10,7 +10,6 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         ShowActivated="False"
-        Topmost="True"
         Background="#01FFFFFF"
         FontFamily="YaHei Consolas Hybrid, Consolas, Segoe UI"
         UseLayoutRounding="True"
