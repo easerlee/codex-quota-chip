@@ -692,9 +692,10 @@ public partial class MainWindow : Window
 
     // Z-order policy, in one place: the bar is a topmost window, so the chip has to be topmost too
     // or the bar paints straight over it. Being topmost is not the same as fighting for the top:
-    // the chip is only raised again when the taskbar itself is what covers it (see
-    // Win32.RaiseOverTaskbar), so the shell's menus, flyouts and Start still come up over it. The
-    // two panels are raised once, when they open.
+    // the chip is only raised when the taskbar itself is what covers it (see
+    // Win32.RaiseOverTaskbar), and never while one of our own panels is open. Owning it to the bar
+    // and leaving the z-order alone is all this needs - a blind raise here re-topped the card every
+    // half second, which put it back over the panel it had just opened.
     private void KeepWithTaskbar()
     {
         if (_handle == IntPtr.Zero)
@@ -704,8 +705,6 @@ public partial class MainWindow : Window
 
         Win32.MakeOverlayWindow(_handle);
         Win32.Own(new TaskbarOwner(_handle));
-        // Visible from the first frame: owned by a topmost bar is still painted underneath it.
-        Win32.RaiseWithoutActivating(_handle);
     }
 
     private void Snap()
@@ -732,8 +731,12 @@ public partial class MainWindow : Window
         }
 
         // The bar re-tops itself on every click and would paint over the chip; this puts the chip
-        // back only while the bar is the thing on top of it, never over an open menu.
-        Win32.RaiseOverTaskbar(_handle, placement);
+        // back only while the bar is the thing on top of it, and never while one of our own panels
+        // is open - those are ours to sit above the card.
+        if (!_panelOpen && !_settingsPopup.IsOpen)
+        {
+            Win32.RaiseOverTaskbar(_handle, placement);
+        }
 
         if (Win32.TryWindowRect(_handle, out var current) &&
             current.Left == placement.X && current.Top == placement.Y &&
