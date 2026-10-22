@@ -28,7 +28,7 @@ public partial class MainWindow : Window
     private readonly AccountFile _accounts;
 
     private readonly Border _plate;
-    private readonly int _stripWidth;
+    private int _stripWidth;
     private ToolTip? _tip;
     private readonly GaugeRow _fiveHour;
     private readonly GaugeRow _week;
@@ -60,7 +60,7 @@ public partial class MainWindow : Window
     private bool _pendingRead;
     private bool _panelOpen;
     private bool _menuButtonWasUp = true;
-    private bool _hiddenForFullscreen;
+    private bool _parked;
     private bool _closing;
 
     public MainWindow(Paths paths, string codexHome, Settings settings, Log log, CodexExe codexExe)
@@ -75,7 +75,7 @@ public partial class MainWindow : Window
         InitializeComponent();
         // As wide as the bottom row needs to be, and never a fixed 116: the clock and the weekly
         // countdown are what set it, and every pixel they do not need is bar.
-        _stripWidth = StripWidth(VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        _stripWidth = StripWidth(TaskbarThickness(), VisualTreeHelper.GetDpi(this).PixelsPerDip);
         Width = _stripWidth;
         Height = DefaultHeight;
 
@@ -708,9 +708,9 @@ public partial class MainWindow : Window
 
     private void Snap()
     {
-        // While parked for a fullscreen app the placement timer must not move the window, not
-        // even when the taskbar itself disappears.
-        if (_hiddenForFullscreen)
+        // While parked the placement timer must not move the window, not even when the taskbar
+        // itself comes back - the visibility timer is what brings it out again.
+        if (_parked)
         {
             return;
         }
@@ -720,6 +720,7 @@ public partial class MainWindow : Window
             Win32.Own(new TaskbarOwner(_handle));
         }
 
+        _stripWidth = StripWidth(TaskbarThickness(), VisualTreeHelper.GetDpi(this).PixelsPerDip);
         var placement = ResolvePlacement(_stripWidth, _settings.DisplayLeft);
         if (_handle == IntPtr.Zero)
         {
@@ -738,12 +739,20 @@ public partial class MainWindow : Window
         Win32.PlaceWithoutActivating(_handle, placement);
     }
 
+    // How thick the bar is right now. 48 is only the guess used before the first placement: a
+    // taskbar with small buttons, or a two-row one, is not 48 - and rows laid out for a height the
+    // strip does not have is how the bottom line gets squeezed.
+    public static int TaskbarThickness() =>
+        Win32.TryTaskbarRect(out var taskbar) && !taskbar.IsEmpty
+            ? Math.Min(taskbar.Width, taskbar.Height)
+            : DefaultHeight;
+
     // The strip is as wide as the longest line its bottom row can show, and every pixel the rows do
     // not need goes to the bars. Kept static so --check can report the width the app would really
     // take without building a window.
-    public static int StripWidth(double pixelsPerDip)
+    public static int StripWidth(int stripHeight, double pixelsPerDip)
     {
-        var rowHeight = (DefaultHeight - (StripMarginY * 2)) / 3.0;
+        var rowHeight = (Math.Max(1, stripHeight) - (StripMarginY * 2)) / 3.0;
         var content = ResetRow.RequiredWidth(rowHeight, pixelsPerDip);
         // One pixel of rounding: the measurement is exact, the layout is not.
         return (int)Math.Ceiling(Math.Max(DefaultWidth, (StripMarginX * 2) + content + 1));
@@ -759,7 +768,7 @@ public partial class MainWindow : Window
                 Placement.InferEdge(taskbar, monitor.Width, monitor.Height),
                 taskbar,
                 preferredWidth,
-                DefaultHeight,
+                TaskbarThickness(),
                 monitor.Width,
                 monitor.Height,
                 anchors.RightLeft,
@@ -767,30 +776,49 @@ public partial class MainWindow : Window
                 pinLeft);
         }
 
-        return Placement.Fallback(preferredWidth, DefaultHeight, monitor.Width, monitor.Height);
+        return Placement.Fallback(preferredWidth, TaskbarThickness(), monitor.Width, monitor.Height);
     }
 
     private void UpdateVisibility()
     {
-        if (IsFullscreenForeground())
+        if (IsParked())
         {
-            if (!_hiddenForFullscreen)
+            if (!_parked)
             {
-                _hiddenForFullscreen = true;
+                _parked = true;
                 Hide();
             }
 
             return;
         }
 
-        if (_hiddenForFullscreen)
+        if (_parked)
         {
-            _hiddenForFullscreen = false;
+            _parked = false;
             Show();
             Snap();
         }
 
         KeepWithTaskbar();
+    }
+
+    // Two things take the taskbar away from under the overlay: a fullscreen app in front, and an
+    // auto-hidden bar sliding off the screen. Both are answered the same way - step aside, come back
+    // when the bar is back.
+    private bool IsParked()
+    {
+        if (IsFullscreenForeground())
+        {
+            return true;
+        }
+
+        if (!Win32.TryTaskbarRect(out var taskbar))
+        {
+            return false;
+        }
+
+        var monitor = Win32.MonitorBounds(IntPtr.Zero);
+        return Placement.Retracted(taskbar, monitor.Width, monitor.Height);
     }
 
     private bool IsFullscreenForeground()

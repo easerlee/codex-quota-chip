@@ -23,6 +23,7 @@ var tests = new (string Name, Action Body)[]
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
+    ("a retracted taskbar takes the overlay with it", TestAutoHide),
     ("bar geometry ignores the label", TestBarGeometry),
     ("click outside closes the panel", TestDismiss),
     ("settings defaults and repair", TestSettings),
@@ -284,6 +285,28 @@ static void TestPlacement()
         "an off-screen anchor is clamped back onto the monitor");
 }
 
+// An auto-hidden taskbar slides out of the screen. The overlay belongs to the bar, so it goes with
+// it instead of hanging in the air at the screen edge with nothing under it.
+static void TestAutoHide()
+{
+    var docked = new Win32.Rect { Left = 0, Top = 1032, Right = 1920, Bottom = 1080 };
+    Equal(false, Placement.Retracted(docked, 1920, 1080), "a docked taskbar keeps the overlay");
+
+    // What auto-hide leaves behind at the bottom edge: a two-pixel sliver.
+    var sliver = new Win32.Rect { Left = 0, Top = 1078, Right = 1920, Bottom = 1126 };
+    Equal(true, Placement.Retracted(sliver, 1920, 1080), "a retracted taskbar sends the overlay with it");
+
+    var offScreen = new Win32.Rect { Left = 0, Top = 1080, Right = 1920, Bottom = 1128 };
+    Equal(true, Placement.Retracted(offScreen, 1920, 1080), "a bar entirely off the screen counts too");
+
+    // A vertical bar slides sideways, so there it is the width that has to stay on the screen.
+    var leftDocked = new Win32.Rect { Left = 0, Top = 0, Right = 48, Bottom = 1080 };
+    Equal(false, Placement.Retracted(leftDocked, 1920, 1080), "a docked vertical bar keeps the overlay");
+
+    var leftHidden = new Win32.Rect { Left = -46, Top = 0, Right = 2, Bottom = 1080 };
+    Equal(true, Placement.Retracted(leftHidden, 1920, 1080), "a retracted vertical bar does not");
+}
+
 // The two overlay bars must start at the same x, so their range may depend on the row geometry
 // only - never on how wide the label happened to measure.
 static void TestBarGeometry()
@@ -489,9 +512,14 @@ static void TestStripWidth()
 
     // 116 was the fixed width that did not fit it; the strip is measured now, and the margins are
     // on top of what the row itself asks for.
-    var strip = MainWindow.StripWidth(1.0);
+    var strip = MainWindow.StripWidth(48, 1.0);
     Equal(true, strip > 116, "the strip is wider than the fixed width it used to have");
     Equal(true, strip >= needed + 6, "and it covers the row plus the strip's own margins");
+
+    // The bar is not always 48: small taskbar buttons make it shorter, and the rows - so the width
+    // that has to fit them - shrink with it. Laying it out for 48 anyway cut the bottom line off.
+    var small = MainWindow.StripWidth(40, 1.0);
+    Equal(true, small <= strip, "a shorter taskbar does not ask for a wider strip");
 }
 
 static void TestRefillWatch()

@@ -95,6 +95,26 @@ public static class Placement
         return right;
     }
 
+    // An auto-hidden taskbar slides out of the monitor, leaving a couple of pixels or nothing at
+    // all. Parking the overlay on that sliver would hang it in the air at the screen edge with the
+    // bar it belongs to gone, so it is time to step aside. Half the bar's own thickness is the line:
+    // a docked taskbar is always on the screen whole, so this cannot fire on one that is merely
+    // moving.
+    public static bool Retracted(Win32.Rect taskbar, int screenWidth, int screenHeight)
+    {
+        if (taskbar.IsEmpty)
+        {
+            return true;
+        }
+
+        var visibleAcross = Math.Min(taskbar.Bottom, screenHeight) - Math.Max(taskbar.Top, 0);
+        var visibleAlong = Math.Min(taskbar.Right, screenWidth) - Math.Max(taskbar.Left, 0);
+
+        return taskbar.Width >= taskbar.Height
+            ? visibleAcross * 2 < taskbar.Height
+            : visibleAlong * 2 < taskbar.Width;
+    }
+
     public static WindowPlacement Fallback(int preferredWidth, int height, int screenWidth, int screenHeight) =>
         Clamp(new WindowPlacement(0, Math.Max(0, screenHeight - height), preferredWidth, height), screenWidth, screenHeight);
 

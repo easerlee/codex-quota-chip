@@ -82,8 +82,10 @@ public partial class App : Application
     {
         Win32.AttachToParentConsole();
         // The width the overlay works out for itself, 1.0 pixels per dip because there is no window
-        // here to ask and the taskbar sits on the primary monitor.
-        var width = CodexQuotaChip.MainWindow.StripWidth(1.0);
+        // here to ask and the taskbar sits on the primary monitor. The height comes from the bar
+        // itself, so a small or two-row taskbar reports the strip it will really get.
+        var height = CodexQuotaChip.MainWindow.TaskbarThickness();
+        var width = CodexQuotaChip.MainWindow.StripWidth(height, 1.0);
         var placement = CodexQuotaChip.MainWindow.ResolvePlacement(width, false, waitForAnchors: true);
         Console.WriteLine($"state   : {paths.Root}");
         Console.WriteLine($"settings: {paths.Settings}");
