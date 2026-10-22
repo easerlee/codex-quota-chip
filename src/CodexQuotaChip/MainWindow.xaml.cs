@@ -183,7 +183,7 @@ public partial class MainWindow : Window
             // The panel is opened by a button release, so the next press is a fresh one.
             _menuButtonWasUp = true;
             _panelGuard.Start();
-            RaisePanelAboveOverlay();
+            RaisePanels();
             KeepWithTaskbar();
         };
         _popup.Closed += (_, _) =>
@@ -201,18 +201,18 @@ public partial class MainWindow : Window
         _settingsPopup.PopupAnimation = PopupAnimation.None;
         _settingsPopup.Child = _settingsPanel;
         _settingsPopup.CustomPopupPlacementCallback = PlaceSettings;
-        _settingsPopup.Opened += (_, _) => RaisePanelAboveOverlay();
+        _settingsPopup.Opened += (_, _) => RaisePanels();
     }
 
-    // The overlay window is topmost, so the panel has to be raised as well: a plain popup would
-    // otherwise be drawn underneath the card wherever the two overlap.
-    private void RaisePanelAboveOverlay()
+    // 层级的第二格：菜单在浮窗上面一格。面板开着的时候每秒重提一次 —— 浮窗是被任务栏拥有的窗口，
+    // 任务栏一刷新就可能把它连人带面板一起甩上去，而面板是我们自己的窗口，提回最上面不跟任何人抢。
+    private void RaisePanels()
     {
         foreach (var panel in new[] { _panel, _settingsPanel })
         {
             if (panel is not null && PresentationSource.FromVisual(panel) is HwndSource source)
             {
-                Win32.RaiseWithoutActivating(source.Handle);
+                Win32.RaiseToTop(source.Handle);
             }
         }
     }
@@ -690,12 +690,8 @@ public partial class MainWindow : Window
 
     private void OnRightClick(object sender, System.Windows.Input.MouseButtonEventArgs e) => ShowPanel();
 
-    // Z-order policy, in one place: the bar is a topmost window, so the chip has to be topmost too
-    // or the bar paints straight over it. Being topmost is not the same as fighting for the top:
-    // the chip is only raised when the taskbar itself is what covers it (see
-    // Win32.RaiseOverTaskbar), and never while one of our own panels is open. Owning it to the bar
-    // and leaving the z-order alone is all this needs - a blind raise here re-topped the card every
-    // half second, which put it back over the panel it had just opened.
+    // 层级规则的另一半在 Snap 里：菜单开着时只提菜单，浮窗不动。这里不改层级，
+    // 只把窗口收编成任务栏的从属窗口，让它跟着任务栏走。
     private void KeepWithTaskbar()
     {
         if (_handle == IntPtr.Zero)
@@ -705,6 +701,7 @@ public partial class MainWindow : Window
 
         Win32.MakeOverlayWindow(_handle);
         Win32.Own(new TaskbarOwner(_handle));
+        Win32.RideAboveTaskbar(_handle);
     }
 
     private void Snap()
@@ -730,12 +727,15 @@ public partial class MainWindow : Window
             return;
         }
 
-        // The bar re-tops itself on every click and would paint over the chip; this puts the chip
-        // back only while the bar is the thing on top of it, and never while one of our own panels
-        // is open - those are ours to sit above the card.
-        if (!_panelOpen && !_settingsPopup.IsOpen)
+        // 每秒按规则重排一次层级：浮窗插在任务栏正上方；菜单开着的时候只提菜单，浮窗不动。
+        // 两边分开，是因为菜单必须一直在浮窗之上，而浮窗只要在任务栏之上就够。
+        if (_panelOpen || _settingsPopup.IsOpen)
         {
-            Win32.RaiseOverTaskbar(_handle, placement);
+            RaisePanels();
+        }
+        else
+        {
+            Win32.RideAboveTaskbar(_handle);
         }
 
         if (Win32.TryWindowRect(_handle, out var current) &&

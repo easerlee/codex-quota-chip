@@ -27,6 +27,9 @@ public static class Win32
     public const int VkRightButton = 0x02;
     public const int ErrorAlreadyExists = 183;
 
+    // GetWindow: the window directly behind the one asked about.
+    public const uint GwHwndNext = 2;
+
     public static readonly IntPtr HwndTopmost = new(-1);
 
     public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr parameter);
@@ -136,9 +139,6 @@ public static class Win32
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out Point point);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr WindowFromPoint(Point point);
 
     [DllImport("user32.dll")]
     private static extern bool EnumWindows(EnumWindowsProc callback, IntPtr parameter);
@@ -349,37 +349,40 @@ public static class Win32
         SetWindowLongPtrValue(hwnd, GwlpHwndParent, (int)taskbar);
     }
 
-    public static void RaiseWithoutActivating(IntPtr hwnd)
+    // 层级只有一条规则：任务栏 < 浮窗 < 菜单，各差一层。
+    //
+    // 浮窗用「插到任务栏正上方」，位置关系是确定的：比任务栏低就被它盖住，比它高就看得见，
+    // 谁刷新都不会把顺序换过来（不用「提到最顶」，那会连系统菜单一起压）。
+    public static void RaiseToTop(IntPtr hwnd)
     {
-        hwnd = RootWindow(hwnd);
-        SetWindowPos(hwnd, HwndTopmost, 0, 0, 0, 0,
-            SwpNoMove | SwpNoSize | SwpNoActivate | SwpShowWindow | SwpNoOwnerZOrder);
+        SetWindowPos(RootWindow(hwnd), HwndTopmost, 0, 0, 0, 0,
+            SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
     }
 
-    // The taskbar is itself a topmost window, so an overlay merely owned by it is still painted
-    // underneath the bar - and the shell re-tops the bar whenever the taskbar is clicked, which
-    // hides the chip until something raises it again. Raised here only while the *bar* is what
-    // covers the chip's own centre: a menu, a flyout or our own panel sitting there is the shell
-    // showing something on purpose, and covering that is what the old every-500 ms re-raise got
-    // wrong. One cheap WindowFromPoint a second, no fighting.
-    public static void RaiseOverTaskbar(IntPtr hwnd, WindowPlacement placement)
+    public static void RideAbove(IntPtr hwnd, IntPtr below)
     {
         hwnd = RootWindow(hwnd);
-        var at = WindowFromPoint(new Point
-        {
-            X = placement.X + (placement.Width / 2),
-            Y = placement.Y + (placement.Height / 2)
-        });
-
-        if (at == IntPtr.Zero)
+        below = RootWindow(below);
+        if (hwnd == IntPtr.Zero || below == IntPtr.Zero || GetWindow(hwnd, GwHwndNext) == below)
         {
             return;
         }
 
-        var root = RootWindow(at);
-        if (root != hwnd && root == TaskbarWindow())
+        // No SWP_SHOWWINDOW here: the card is hidden on purpose while a fullscreen app owns the
+        // screen, and a z-order move must never be what brings it back.
+        SetWindowPos(hwnd, below, 0, 0, 0, 0,
+            SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
+    }
+
+    // The card sits one layer above the bar. Anything else the shell puts above the bar (its own
+    // menus) lands underneath the card by this rule - which is why a menu over the strip makes the
+    // card step aside instead of arguing about z-order.
+    public static void RideAboveTaskbar(IntPtr hwnd)
+    {
+        var taskbar = TaskbarWindow();
+        if (taskbar != IntPtr.Zero)
         {
-            RaiseWithoutActivating(hwnd);
+            RideAbove(hwnd, taskbar);
         }
     }
 
