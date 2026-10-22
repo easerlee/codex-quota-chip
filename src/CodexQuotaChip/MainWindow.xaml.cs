@@ -455,17 +455,15 @@ public partial class MainWindow : Window
             var live = string.Equals(record.Id, currentId, StringComparison.OrdinalIgnoreCase);
             if (_settings.NotifyOnReset)
             {
-                if (live)
-                {
-                    _notifier?.Show("Codex 额度已重置", new ResetRollover(five, week).Describe(100, 100));
-                }
-                else
-                {
-                    var what = five && week ? "5 小时和周额度已恢复" : five ? "5 小时额度已恢复" : "周额度已恢复";
-                    _notifier?.Show($"「{label}」{what}", "该账号未登录，以最后一次刷新数据推算。");
-                }
+                var shown = live
+                    ? _notifier?.Show("Codex 额度已重置", new ResetRollover(five, week).Describe(100, 100)) ?? false
+                    : _notifier?.Show(
+                        $"「{label}」{(five && week ? "5 小时和周额度已恢复" : five ? "5 小时额度已恢复" : "周额度已恢复")}",
+                        "该账号未登录，以最后一次刷新数据推算。") ?? false;
 
-                _log.Info($"quota refill notified (account={label}, live={live}, 5h={five}, week={week})");
+                _log.Info(shown
+                    ? $"quota refill notified (account={label}, live={live}, 5h={five}, week={week})"
+                    : $"quota refill not shown (account={label}, live={live})");
             }
 
             records[index] = record with
@@ -520,9 +518,11 @@ public partial class MainWindow : Window
 
         if (rollover.Any && _settings.NotifyOnReset)
         {
-            _notifier?.Show("Codex 额度已重置", rollover.Describe(
-                reading.FiveHour?.RemainingPercent, reading.Weekly?.RemainingPercent));
-            _log.Info($"quota reset notified (5h={rollover.FiveHour}, week={rollover.Week})");
+            var shown = _notifier?.Show("Codex 额度已重置", rollover.Describe(
+                reading.FiveHour?.RemainingPercent, reading.Weekly?.RemainingPercent)) ?? false;
+            _log.Info(shown
+                ? $"quota reset notified (5h={rollover.FiveHour}, week={rollover.Week})"
+                : $"quota reset not shown (5h={rollover.FiveHour}, week={rollover.Week})");
         }
     }
 

@@ -26,6 +26,14 @@ public sealed class Notifier : IDisposable
 
     public bool Show(string title, string text)
     {
+        // Turned off in Windows is an answer, not a fault. Nothing is shown, and a balloon - a
+        // second channel - is not used to get around the setting the user chose.
+        if (!NotificationsAllowed())
+        {
+            _log.Info("notifications are off for this app, nothing shown");
+            return false;
+        }
+
         var tag = "r" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         if (!Toast(title, text, tag))
         {
@@ -52,6 +60,21 @@ public sealed class Notifier : IDisposable
     }
 
     public void Dispose() => _balloon?.Dispose();
+
+    // The two switches that decide whether a toast is allowed at all: the machine-wide one and this
+    // app's own. Absent means "not set", which is the default - allowed.
+    public static bool Allowed(int? toastEnabled, int? appEnabled) =>
+        toastEnabled != 0 && appEnabled != 0;
+
+    private static bool NotificationsAllowed()
+    {
+        using var push = Registry.CurrentUser.OpenSubKey(
+            @"Software\Microsoft\Windows\CurrentVersion\PushNotifications");
+        using var app = Registry.CurrentUser.OpenSubKey(
+            $@"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings\{Aumid}");
+
+        return Allowed(push?.GetValue("ToastEnabled") as int?, app?.GetValue("Enabled") as int?);
+    }
 
     // Did that toast reach the Action Center? Polled for a couple of seconds because the shell files
     // it asynchronously. A history that cannot be read counts as "it arrived": failing to check must

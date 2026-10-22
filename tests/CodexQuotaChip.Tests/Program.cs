@@ -17,6 +17,7 @@ var tests = new (string Name, Action Body)[]
     ("the strip is measured from its longest line", TestStripWidth),
     ("a window that ran out of time is reported once", TestRefillWatch),
     ("the panel's background is opaque", TestPanelIsOpaque),
+    ("notifications follow the switches", TestNotificationSwitch),
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
@@ -510,6 +511,15 @@ static void TestPanelIsOpaque()
     // It used to be #F0141619 - 6% transparent, which let the desktop read through the panel and
     // looked like a rendering fault over a light window.
     Equal((byte)255, Theme.Panel.Background.A, "the panel's own background is opaque");
+}
+
+static void TestNotificationSwitch()
+{
+    // Absent means the default, which is allowed; either switch being 0 means the user said no.
+    Equal(true, Notifier.Allowed(null, null), "no switch set means allowed");
+    Equal(true, Notifier.Allowed(1, null), "the machine switch on means allowed");
+    Equal(false, Notifier.Allowed(0, null), "the machine switch off means nothing is shown");
+    Equal(false, Notifier.Allowed(1, 0), "this app's switch off means nothing is shown");
 }
 
 static void Equal<T>(T expected, T actual, string what)
