@@ -18,6 +18,7 @@ var tests = new (string Name, Action Body)[]
     ("a window that ran out of time is reported once", TestRefillWatch),
     ("the panel's background is opaque", TestPanelIsOpaque),
     ("notifications follow the switches", TestNotificationSwitch),
+    ("the widget pill in front of the tray is avoided", TestWidgetPill),
     ("the notification payload is well formed", TestToastPayload),
     ("panel orders accounts by who frees up first", TestAccountOrder),
     ("overlay parks on both display sides", TestPlacement),
@@ -520,6 +521,22 @@ static void TestNotificationSwitch()
     Equal(true, Notifier.Allowed(1, null), "the machine switch on means allowed");
     Equal(false, Notifier.Allowed(0, null), "the machine switch off means nothing is shown");
     Equal(false, Notifier.Allowed(1, 0), "this app's switch off means nothing is shown");
+}
+
+static void TestWidgetPill()
+{
+    // The pill is the non-task-list button nearest the tray. The Start button is at the far end and
+    // is not a pill in front of the tray.
+    List<(int Left, int Right, bool TaskList)> withPill =
+    [
+        (0, 55, false),
+        (55, 820, true),
+        (2927, 3079, false)
+    ];
+
+    Equal(2927, Placement.PillLeftEdge(3091, withPill), "the widget pill is found in front of the tray");
+    Equal(0, Placement.PillLeftEdge(3091, [(55, 820, true)]), "no pill means no answer");
+    Equal(0, Placement.PillLeftEdge(3091, [(0, 55, false), (55, 820, true)]), "a button far from the tray is not a pill");
 }
 
 static void Equal<T>(T expected, T actual, string what)

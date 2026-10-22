@@ -161,7 +161,9 @@ public static class Win32
 
     public static IntPtr TaskbarWindow() => FindWindowW("Shell_TrayWnd", null);
 
-    // Left edge of the notification area (tray icons plus clock) on the primary taskbar.
+    // Left edge of the right-hand cluster on the primary taskbar: the notification area, or the
+    // widget pill Windows 11 draws in front of it. The pill is not a window, so UIAutomation is
+    // asked for its rectangle, and the answer is cached - this runs on the placement timer.
     public static int TrayLeftEdge()
     {
         var taskbar = TaskbarWindow();
@@ -171,7 +173,83 @@ public static class Win32
         }
 
         var tray = FindWindowExW(taskbar, IntPtr.Zero, "TrayNotifyWnd", null);
-        return tray != IntPtr.Zero && GetWindowRect(tray, out var rect) && !rect.IsEmpty ? rect.Left : 0;
+        var trayLeft = tray != IntPtr.Zero && GetWindowRect(tray, out var trayRect) && !trayRect.IsEmpty
+            ? trayRect.Left
+            : 0;
+
+        var pill = PillLeftEdge(taskbar, trayLeft);
+        return pill > 0 ? pill : trayLeft;
+    }
+
+    private const int PillCacheMs = 3000;
+    private static int _pillCache;
+    private static int _pillTrayLeft;
+    private static long _pillAt;
+    private static int _pillBusy;
+
+    // UIAutomation wants an MTA apartment, and the placement timer runs on WPF's STA thread where the
+    // query comes back empty. So the question is asked on a thread of its own and the answer is
+    // cached; this call always uses whatever the last answer was, and 0 means "not known yet".
+    private static int PillLeftEdge(IntPtr taskbar, int trayLeft)
+    {
+        if (trayLeft <= 0)
+        {
+            return 0;
+        }
+
+        if (trayLeft != _pillTrayLeft)
+        {
+            _pillCache = 0;
+            _pillTrayLeft = trayLeft;
+            _pillAt = 0;
+        }
+
+        if (Environment.TickCount64 - _pillAt >= PillCacheMs && Interlocked.Exchange(ref _pillBusy, 1) == 0)
+        {
+            _ = Task.Run(() =>
+            {
+                try
+                {
+                    _pillCache = QueryPill(taskbar, trayLeft);
+                }
+                catch (Exception)
+                {
+                    _pillCache = 0;
+                }
+                finally
+                {
+                    _pillAt = Environment.TickCount64;
+                    Interlocked.Exchange(ref _pillBusy, 0);
+                }
+            });
+        }
+
+        return _pillCache;
+    }
+
+    private static int QueryPill(IntPtr taskbar, int trayLeft)
+    {
+        var bar = System.Windows.Automation.AutomationElement.FromHandle(taskbar);
+        var found = bar?.FindAll(
+            System.Windows.Automation.TreeScope.Descendants,
+            new System.Windows.Automation.PropertyCondition(
+                System.Windows.Automation.AutomationElement.ControlTypeProperty,
+                System.Windows.Automation.ControlType.Button));
+
+        if (found is null)
+        {
+            return 0;
+        }
+
+        var buttons = new List<(int Left, int Right, bool TaskList)>();
+        foreach (System.Windows.Automation.AutomationElement button in found)
+        {
+            var rect = button.Current.BoundingRectangle;
+            var taskList = button.Current.ClassName?.StartsWith("Taskbar.TaskListButton", StringComparison.Ordinal) == true;
+            buttons.Add(((int)rect.Left, (int)rect.Right, taskList));
+        }
+
+        return Placement.PillLeftEdge(trayLeft, buttons);
     }
 
     public static bool TryTaskbarRect(out Rect rect)

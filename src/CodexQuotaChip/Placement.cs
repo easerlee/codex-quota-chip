@@ -14,6 +14,34 @@ public static class Placement
     // Gap between the overlay and whatever it is parked next to.
     public const int Gap = 8;
 
+    // How far in front of the tray a "pill" can sit and still belong to it. Anything further away
+    // is the other end of the bar - the Start button, say - not something in front of the tray.
+    public const int PillReach = 400;
+
+    // Windows 11 draws its widget (weather) pill in front of the tray on the taskbar's own XAML
+    // layer, so it has no window to measure. UIAutomation still reports it as a button, and it is
+    // the non-task-list button nearest the tray. Zero means none found.
+    public static int PillLeftEdge(int trayLeft, IReadOnlyList<(int Left, int Right, bool TaskList)> buttons)
+    {
+        var picked = 0;
+        var nearest = int.MinValue;
+        foreach (var button in buttons)
+        {
+            if (button.TaskList || button.Left <= 0 || button.Right > trayLeft || trayLeft - button.Right > PillReach)
+            {
+                continue;
+            }
+
+            if (button.Right > nearest)
+            {
+                nearest = button.Right;
+                picked = button.Left;
+            }
+        }
+
+        return picked;
+    }
+
     public static WindowPlacement Compute(
         uint edge,
         Win32.Rect taskbar,
