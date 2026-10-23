@@ -323,17 +323,45 @@ public partial class MainWindow : Window
         _settingsPopup.IsOpen = true;
     }
 
-    // The card is parked at the screen's right end, so the panel opens up and to the left of the
-    // cursor. These offsets are relative to the card, so negative coordinates are normal.
+    // 面板不跟着鼠标走：它的下边贴着浮窗的上边，右（左对齐时是左）边和浮窗对齐。两者**永远不重叠** ——
+    // 不重叠就不存在谁压住谁，这比任何 z-order 判断都稳。位置只由浮窗矩形算出，点浮窗哪个位置都一样。
     private CustomPopupPlacement[] PlacePanel(Size popup, Size target, Point offset)
     {
         if (_panelAnchor is null)
         {
-            var cursor = System.Windows.Input.Mouse.GetPosition(this);
-            _panelAnchor = new Point(cursor.X - popup.Width + 10, cursor.Y - popup.Height - 10);
+            _panelAnchor = PanelAnchorFor(popup);
         }
 
         return [new CustomPopupPlacement(_panelAnchor.Value, PopupPrimaryAxis.Horizontal)];
+    }
+
+    private Point PanelAnchorFor(Size popup)
+    {
+        var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        if (scale <= 0)
+        {
+            scale = 1;
+        }
+
+        // 拿不到浮窗矩形（极少见）时退回到「面板左下角在浮窗左上角」，至少不会盖住它。
+        if (!Win32.TryWindowRect(_handle, out var card))
+        {
+            return new Point(-popup.Width, -popup.Height);
+        }
+
+        var cardWidth = (card.Right - card.Left) / scale;
+        var x = _settings.DisplayLeft ? 0 : cardWidth - popup.Width;
+        var y = -popup.Height - (SettingsGap / scale);
+
+        // 屏幕上方放不下时往下压，宁可贴着浮窗，也不让面板跑到屏幕外。
+        var screenTop = Win32.MonitorBounds(_handle).Top;
+        var wanted = card.Top + (y * scale);
+        if (wanted < screenTop)
+        {
+            y += (screenTop - wanted) / scale;
+        }
+
+        return new Point(x, y);
     }
 
     // The settings layer goes against the right edge of the card it was opened from, a little way
