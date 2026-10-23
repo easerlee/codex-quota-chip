@@ -27,6 +27,9 @@ public static class Win32
     public const int VkRightButton = 0x02;
     public const int ErrorAlreadyExists = 183;
 
+    // GetWindow: the window directly in front of the one asked about.
+    public const uint GwHwndPrev = 3;
+
     public static readonly IntPtr HwndTopmost = new(-1);
 
     public delegate bool EnumWindowsProc(IntPtr hwnd, IntPtr parameter);
@@ -359,6 +362,12 @@ public static class Win32
         SetWindowPos(RootWindow(hwnd), HwndTopmost, 0, 0, 0, 0,
             SwpNoMove | SwpNoSize | SwpNoActivate | SwpNoOwnerZOrder);
     }
+
+    // z-order 里 other 是否正贴着 hwnd 前面。用来判断「菜单是不是刚被浮窗压住」—— 只有这一种
+    // 情况需要动它，其它情况一次窗口都不写。
+    public static bool IsDirectlyInFront(IntPtr hwnd, IntPtr other) =>
+        hwnd != IntPtr.Zero && other != IntPtr.Zero
+        && GetWindow(RootWindow(hwnd), GwHwndPrev) == RootWindow(other);
 
     // The shell's own menus and flyouts are windows of their own, and they are what the card must
     // never cover: Win11 draws them as Xaml_WindowedPopupClass, a classic menu is #32768, and the

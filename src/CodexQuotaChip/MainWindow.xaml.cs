@@ -244,6 +244,26 @@ public partial class MainWindow : Window
         }
     }
 
+    // 兜底：任务栏刷新会把它拥有的浮窗甩到菜单前面，一秒一次的补提在肉眼上就是「压住」。
+    // 面板开着时，80ms 的守候定时器顺带看一眼顺序 —— 只有「浮窗正贴着菜单前面」才动它，
+    // 其它情况一概不碰。
+    private void KeepPanelsInFront()
+    {
+        if (_handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        foreach (var panel in new[] { _panel, _settingsPanel })
+        {
+            if (panel is not null && PresentationSource.FromVisual(panel) is HwndSource source
+                && Win32.IsDirectlyInFront(_handle, source.Handle))
+            {
+                Win32.RaiseToTop(source.Handle);
+            }
+        }
+    }
+
     private void ShowPanel()
     {
         if (_panel is null)
@@ -333,6 +353,9 @@ public partial class MainWindow : Window
 
     private void CheckPanelDismiss()
     {
+        // Runs only while a panel is open, every 80 ms: the cheapest place for the layer upkeep too.
+        KeepPanelsInFront();
+
         var pressed = Win32.MouseButtonDown();
         var wasUp = _menuButtonWasUp;
         _menuButtonWasUp = !pressed;
