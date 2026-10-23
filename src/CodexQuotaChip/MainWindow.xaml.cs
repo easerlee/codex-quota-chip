@@ -248,8 +248,8 @@ public partial class MainWindow : Window
     }
 
     // 兜底：任务栏刷新会把它拥有的浮窗甩到菜单前面，一秒一次的补提在肉眼上就是「压住」。
-    // 面板开着时，80ms 的守候定时器顺带看一眼顺序 —— 只有「浮窗正贴着菜单前面」才动它，
-    // 其它情况一概不碰。
+    // 面板开着时，80ms 的守候定时器顺带看一眼 —— 判断方式是「两者重叠的那一点，最上层是谁」，
+    // 不用 z-order 邻居：中间随时可能夹进提示框、输入法之类的窗口，邻居一错就永远不触发。
     private void KeepPanelsInFront()
     {
         if (_handle == IntPtr.Zero)
@@ -259,13 +259,33 @@ public partial class MainWindow : Window
 
         foreach (var panel in new[] { _panel, _settingsPanel })
         {
-            // 「浮窗正贴着面板前面」= 面板被压住了。参数顺序别写反：第一个是被检查的那个窗口。
             if (panel is not null && PresentationSource.FromVisual(panel) is HwndSource source
-                && Win32.IsDirectlyInFront(source.Handle, _handle))
+                && CardCoversPanel(source.Handle))
             {
                 Win32.RaiseToTop(source.Handle);
             }
         }
+    }
+
+    // 面板和浮窗重叠的那一点，最上层是不是浮窗自己。
+    private bool CardCoversPanel(IntPtr panelHandle)
+    {
+        if (!Win32.TryWindowRect(panelHandle, out var panel) || !Win32.TryWindowRect(_handle, out var card))
+        {
+            return false;
+        }
+
+        var left = Math.Max(panel.Left, card.Left);
+        var right = Math.Min(panel.Right, card.Right);
+        var top = Math.Max(panel.Top, card.Top);
+        var bottom = Math.Min(panel.Bottom, card.Bottom);
+        if (left >= right || top >= bottom)
+        {
+            return false; // 不重叠就没有谁压谁的问题
+        }
+
+        var at = Win32.WindowAt((left + right) / 2, (top + bottom) / 2);
+        return at != IntPtr.Zero && Win32.RootWindow(at) == Win32.RootWindow(_handle);
     }
 
     private void ShowPanel()
