@@ -224,6 +224,13 @@ public partial class MainWindow : Window
         {
             RaisePanels();
         }
+
+        // 悬停提示也是我们自己的窗口，同样排在卡片之上。卡片每秒重提一次，不提它就会被卡片压住
+        // —— 截图里提示文字被额度条盖住就是这么来的。
+        if (_tip is { IsOpen: true } && PresentationSource.FromVisual(_tip) is HwndSource tip)
+        {
+            Win32.RaiseToTop(tip.Handle);
+        }
     }
 
     private void RaisePanels()
