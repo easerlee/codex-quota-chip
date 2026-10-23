@@ -256,8 +256,9 @@ public partial class MainWindow : Window
 
         foreach (var panel in new[] { _panel, _settingsPanel })
         {
+            // 「浮窗正贴着面板前面」= 面板被压住了。参数顺序别写反：第一个是被检查的那个窗口。
             if (panel is not null && PresentationSource.FromVisual(panel) is HwndSource source
-                && Win32.IsDirectlyInFront(_handle, source.Handle))
+                && Win32.IsDirectlyInFront(source.Handle, _handle))
             {
                 Win32.RaiseToTop(source.Handle);
             }
