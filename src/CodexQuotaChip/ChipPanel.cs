@@ -143,20 +143,60 @@ public sealed class ChipPanel : Border
         _rows.Children.Add(Divider());
         _rows.Children.Add(CommandRow("刷新当前账号数据", _refresh));
         _rows.Children.Add(CommandRow("设置 ›", _openSettings));
+        _rows.Children.Add(StarRow());
         _rows.Children.Add(Divider());
         _rows.Children.Add(CommandRow("退出", _exit, danger: true));
-        _rows.Children.Add(VersionRow());
     }
 
-    // 面板底部写一行版本号。排查时第一件事就是确认「现在跑的是哪一版」——「改完没重启」这种事，
-    // 看一眼面板就能排除。
-    private static UIElement VersionRow()
+    private const string RepoUrl = "https://github.com/easerlee/codex-quota-chip";
+
+    // 设置下面这一行：左边 `GitHub ★` 点开仓库，右边固定写版本号。字号、颜色、行内边距都和上面
+    // 那几行命令一致，所以行高一样；版本号固定在这一行右下角，位置不随面板内容变。
+    private static UIElement StarRow()
     {
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var link = Caption("GitHub ★", Theme.Panel.Text, 12.5);
+        link.Cursor = Cursors.Hand;
+        link.VerticalAlignment = VerticalAlignment.Center;
+        link.ToolTip = RepoUrl;
+        link.MouseLeftButtonUp += (_, _) => OpenRepo();
+        Grid.SetColumn(link, 0);
+        grid.Children.Add(link);
+
         var version = typeof(ChipPanel).Assembly.GetName().Version;
-        var label = Caption(version is null ? "dev" : $"v{version.ToString(3)}", Theme.Panel.Dim, 10.5);
-        label.HorizontalAlignment = HorizontalAlignment.Right;
-        label.Margin = new Thickness(RowInset, 2, RowInset, 0);
-        return label;
+        var stamp = Caption(version is null ? "dev" : $"v{version.ToString(3)}", Theme.Panel.Dim, 10.5);
+        stamp.VerticalAlignment = VerticalAlignment.Center;
+        stamp.HorizontalAlignment = HorizontalAlignment.Right;
+        Grid.SetColumn(stamp, 1);
+        grid.Children.Add(stamp);
+
+        // 和 CommandRow 同一个内边距，行高才与上下几行齐平。
+        var row = new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(RowInset, PlateHeight, RowInset, PlateHeight),
+            Background = Brushes.Transparent,
+            Child = grid
+        };
+        row.MouseEnter += (_, _) => row.Background = new SolidColorBrush(Theme.Panel.Hover);
+        row.MouseLeave += (_, _) => row.Background = Brushes.Transparent;
+        return row;
+    }
+
+    private static void OpenRepo()
+    {
+        try
+        {
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(RepoUrl) { UseShellExecute = true });
+        }
+        catch (Exception)
+        {
+            // No default browser, no link. There is nothing useful to report from here.
+        }
     }
 
     private void BuildSettings()
