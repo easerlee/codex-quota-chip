@@ -20,7 +20,7 @@ public static class Readout
     {
         if (Spent(remainingPercent, resetsAt, now))
         {
-            return "已重置";
+            return Strings.ResetLabel;
         }
 
         if (!resetsAt.HasValue)

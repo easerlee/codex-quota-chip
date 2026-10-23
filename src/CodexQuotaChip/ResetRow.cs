@@ -16,7 +16,8 @@ public sealed class ResetRow : FrameworkElement
         "23:59 / 12h 59m",
         "23:59 / reset now",
         "--:-- / reset --",
-        "已重置 / 已重置"
+        "已重置 / 已重置",
+        "reset / reset"
     ];
 
     // How wide one bottom-row line comes out, in the font the row actually draws with.

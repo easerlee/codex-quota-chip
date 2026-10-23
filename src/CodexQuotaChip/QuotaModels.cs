@@ -15,9 +15,9 @@ public sealed record ResetCredits(int Available, long? ExpiresAt)
     // What the icon means, in words, for its tooltip.
     public string Describe(DateTimeOffset now)
     {
-        var count = Available == 1 ? "1 次额度重置可用" : $"{Available} 次额度重置可用";
+        var count = Strings.Credits(Available);
         return ExpiresAt is long at
-            ? $"{count}（最近 {DateTimeOffset.FromUnixTimeSeconds(at).ToLocalTime():yyyy-MM-dd} 到期）"
+            ? count + Strings.CreditsExpire(DateTimeOffset.FromUnixTimeSeconds(at).ToLocalTime().ToString("yyyy-MM-dd"))
             : count;
     }
 }

@@ -26,6 +26,8 @@ public partial class App : Application
 
         var settings = SettingsFile.Load(paths.Settings, _log);
         ApplyOverrides(settings, e.Args);
+        // 语言在任何界面出现之前定下来：--notify-test 那条路也会用到文案。
+        Strings.Use(settings.Language);
         var codexHome = Paths.CodexHome(e.Args);
         var codexExe = new CodexExe(Value(e.Args, "--codex-exe"), _log);
 
@@ -125,7 +127,7 @@ public partial class App : Application
         window.Show();
 
         using var notifier = new Notifier(new WindowInteropHelper(window).Handle, log);
-        var shown = notifier.Show("Codex 额度已重置", "测试通知：看到这条就说明重置提醒能弹出来");
+        var shown = notifier.Show(Strings.ResetToastTitle, Strings.NotifyTestBody);
 
         Console.WriteLine(shown
             ? "notification sent (look above the notification area)"

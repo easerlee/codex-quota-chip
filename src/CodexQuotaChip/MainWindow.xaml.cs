@@ -72,6 +72,9 @@ public partial class MainWindow : Window
         _client = new QuotaClient(codexHome, log, codexExe.Resolve);
         _accounts = new AccountFile(paths.Accounts);
 
+        // 语言在建界面之前定下来：下面每一处文字都是从这里取的。
+        Strings.Use(settings.Language);
+
         InitializeComponent();
         // As wide as the bottom row needs to be, and never a fixed 116: the clock and the weekly
         // countdown are what set it, and every pixel they do not need is bar.
@@ -82,7 +85,7 @@ public partial class MainWindow : Window
         // A tool window with no taskbar button never shows a title on hover, so the two mouse
         // actions have to be a tooltip of their own. The window is not click-through - it keeps the
         // mouse messages it needs for this (and for the panel's click-outside rule).
-        _tip = new ToolTip { Content = "左键刷新.右键设置" };
+        _tip = new ToolTip { Content = Strings.Tip };
         ToolTip = _tip;
         ToolTipService.SetInitialShowDelay(this, 300);
         ToolTipService.SetShowDuration(this, 10000);
@@ -161,8 +164,8 @@ public partial class MainWindow : Window
 
     private void BuildPanel()
     {
-        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, ToggleSettingsLayer, Exit);
-        _settingsPanel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, ToggleSettingsLayer, Exit, settingsOnly: true);
+        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ToggleSettingsLayer, Exit);
+        _settingsPanel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ToggleSettingsLayer, Exit, settingsOnly: true);
 
         _popup.PlacementTarget = this;
         _popup.Placement = PlacementMode.Custom;
@@ -506,10 +509,10 @@ public partial class MainWindow : Window
             if (_settings.NotifyOnReset)
             {
                 var shown = live
-                    ? _notifier?.Show("Codex 额度已重置", new ResetRollover(five, week).Describe(100, 100)) ?? false
+                    ? _notifier?.Show(Strings.ResetToastTitle, new ResetRollover(five, week).Describe(100, 100)) ?? false
                     : _notifier?.Show(
-                        $"「{label}」{(five && week ? "5 小时和周额度已恢复" : five ? "5 小时额度已恢复" : "周额度已恢复")}",
-                        "该账号未登录，以最后一次刷新数据推算。") ?? false;
+                        Strings.RefillHeadline(label, five, week),
+                        Strings.UnloggedNote) ?? false;
 
                 _log.Info(shown
                     ? $"quota refill notified (account={label}, live={live}, 5h={five}, week={week})"
@@ -568,7 +571,7 @@ public partial class MainWindow : Window
 
         if (rollover.Any && _settings.NotifyOnReset)
         {
-            var shown = _notifier?.Show("Codex 额度已重置", rollover.Describe(
+            var shown = _notifier?.Show(Strings.ResetToastTitle, rollover.Describe(
                 reading.FiveHour?.RemainingPercent, reading.Weekly?.RemainingPercent)) ?? false;
             _log.Info(shown
                 ? $"quota reset notified (5h={rollover.FiveHour}, week={rollover.Week})"
@@ -658,6 +661,29 @@ public partial class MainWindow : Window
         _settings.Normalize();
         SettingsFile.Save(_paths.Settings, _settings, _log);
         Snap();
+    }
+
+    // 换语言要立刻见效，而文字是构建时写进控件的 —— 所以两层都整块重建，顺带更新悬停提示。
+    private void SetLanguage(string language)
+    {
+        _settings.Language = language;
+        _settings.Normalize();
+        SettingsFile.Save(_paths.Settings, _settings, _log);
+        Strings.Use(_settings.Language);
+        _tip!.Content = Strings.Tip;
+        FillPanels();
+    }
+
+    private void FillPanels()
+    {
+        var accounts = _accounts.Load();
+        var current = AccountIdentity.Read(_codexHome)?.Id;
+        var autostart = Autostart.IsEnabled();
+        _panel?.Fill(accounts, current, _settings, autostart);
+        if (_settingsPopup.IsOpen)
+        {
+            _settingsPanel?.Fill(accounts, current, _settings, autostart);
+        }
     }
 
     // Returns the state the registry ended up in, so the switch shows the truth rather than the

@@ -46,6 +46,7 @@ public sealed class ChipPanel : Border
     private readonly Action _openSettings;
     private readonly Action<int> _setRefreshSeconds;
     private readonly Action<string> _setDisplaySide;
+    private readonly Action<string> _setLanguage;
     private readonly Action _exit;
 
     public ChipPanel(
@@ -55,6 +56,7 @@ public sealed class ChipPanel : Border
         Func<bool> togglePlate,
         Action<int> setRefreshSeconds,
         Action<string> setDisplaySide,
+        Action<string> setLanguage,
         Action openSettings,
         Action exit,
         bool settingsOnly = false)
@@ -66,6 +68,7 @@ public sealed class ChipPanel : Border
         _togglePlate = togglePlate;
         _setRefreshSeconds = setRefreshSeconds;
         _setDisplaySide = setDisplaySide;
+        _setLanguage = setLanguage;
         _openSettings = openSettings;
         _exit = exit;
 
@@ -113,7 +116,9 @@ public sealed class ChipPanel : Border
         var ordered = AccountOrder.Sort(_accounts, _currentId, now);
         if (ordered.Count == 0)
         {
-            var empty = Caption("还没有账号记录，取数成功后自动记录", Theme.Panel.Dim, 12);
+            var empty = Caption(Strings.NoAccounts, Theme.Panel.Dim, 12);
+            // 英文那句更长，让它自己换行，别撑出面板。
+            empty.TextWrapping = TextWrapping.Wrap;
             empty.Margin = new Thickness(RowInset, 0, RowInset, 0);
             _rows.Children.Add(empty);
         }
@@ -141,11 +146,11 @@ public sealed class ChipPanel : Border
         }
 
         _rows.Children.Add(Divider());
-        _rows.Children.Add(CommandRow("刷新当前账号数据", _refresh));
-        _rows.Children.Add(CommandRow("设置 ›", _openSettings));
+        _rows.Children.Add(CommandRow(Strings.RefreshNow, _refresh));
+        _rows.Children.Add(CommandRow(Strings.SettingsRow, _openSettings));
         _rows.Children.Add(StarRow());
         _rows.Children.Add(Divider());
-        _rows.Children.Add(CommandRow("退出", _exit, danger: true));
+        _rows.Children.Add(CommandRow(Strings.Exit, _exit, danger: true));
     }
 
     private const string RepoUrl = "https://github.com/easerlee/codex-quota-chip";
@@ -202,13 +207,16 @@ public sealed class ChipPanel : Border
     private void BuildSettings()
     {
         _rows.Children.Clear();
-        _rows.Children.Add(SettingRow("刷新间隔", IntervalPicker(_settings.RefreshSeconds)));
-        _rows.Children.Add(SettingRow("显示位置", new Segmented(
-            ["左", "右"], _settings.DisplayLeft ? 0 : 1, index => _setDisplaySide(index == 0 ? "left" : "right"))));
+        _rows.Children.Add(SettingRow(Strings.RefreshInterval, IntervalPicker(_settings.RefreshSeconds)));
+        _rows.Children.Add(SettingRow(Strings.DisplaySide, new Segmented(
+            [Strings.SideLeft, Strings.SideRight], _settings.DisplayLeft ? 0 : 1, index => _setDisplaySide(index == 0 ? "left" : "right"))));
         // The plate the overlay draws under itself: same idea as this panel's own background.
-        _rows.Children.Add(SwitchRow("黑色底图", _settings.Plate, _togglePlate));
+        _rows.Children.Add(SwitchRow(Strings.Plate, _settings.Plate, _togglePlate));
         _rows.Children.Add(AutostartRow(_autostart));
-        _rows.Children.Add(SwitchRow("额度重置时通知", _settings.NotifyOnReset, _toggleNotifications));
+        _rows.Children.Add(SwitchRow(Strings.NotifyOnReset, _settings.NotifyOnReset, _toggleNotifications));
+        // 语言放在最后一行：改它会把两层面板整个重建，所以不夹在中间。
+        _rows.Children.Add(SettingRow(Strings.Language, new Segmented(
+            ["中", "EN"], _settings.English ? 1 : 0, index => _setLanguage(index == 0 ? "zh" : "en"))));
     }
 
     private Segmented IntervalPicker(int currentSeconds)
@@ -234,7 +242,7 @@ public sealed class ChipPanel : Border
 
     // Sits right after the name of the account that is logged in now, so the rows under it read as
     // "these numbers belong to the live one".
-    public const string CurrentMarker = "【当前】";
+    public static string CurrentMarker => Strings.Current;
 
     // The account name, with that account's reset tickets sitting on the right-hand edge of the
     // row - the same edge the metrics' reset column ends on. A right-aligned strip grows leftwards,
@@ -370,7 +378,7 @@ public sealed class ChipPanel : Border
     }
 
     private static string ValueText(double? remaining, long? resetsAt, DateTimeOffset now) =>
-        Readout.Spent(remaining, resetsAt, now) ? "已重置" : Readout.Percent(remaining);
+        Readout.Spent(remaining, resetsAt, now) ? Strings.ResetLabel : Readout.Percent(remaining);
 
     private static string ResetText(double? remaining, long? resetsAt, DateTimeOffset now, bool weekly) =>
         Readout.Spent(remaining, resetsAt, now) ? string.Empty : Readout.When(remaining, resetsAt, now, weekly);
@@ -484,7 +492,7 @@ public sealed class ChipPanel : Border
     // hover plate: the switch itself is the affordance. The switch takes the state the registry
     // ended up in, not the intent of the click, and the panel stays open so it is seen moving.
     private UIElement AutostartRow(bool autostart) =>
-        SwitchRow("开机自动启动", autostart, _toggleAutostart);
+        SwitchRow(Strings.Autostart, autostart, _toggleAutostart);
 
     private static UIElement SwitchRow(string text, bool on, Func<bool> toggle)
     {

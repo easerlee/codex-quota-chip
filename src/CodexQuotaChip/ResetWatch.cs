@@ -46,15 +46,15 @@ public readonly record struct ResetRollover(bool FiveHour, bool Week)
     // What to say about it: one line per window that rolled over, shortest useful wording.
     public string Describe(double? fiveHourLeft, double? weekLeft)
     {
-        string Left(double? value) => value is null ? "额度已恢复" : $"现在剩余 {(int)Math.Round(value.Value)}%";
+        var left = Strings.Left;
 
         if (FiveHour && Week)
         {
-            return $"5 小时和周额度都已重置，{Left(fiveHourLeft)}";
+            return Strings.BothReset(left(fiveHourLeft));
         }
 
         return FiveHour
-            ? $"5 小时额度已重置，{Left(fiveHourLeft)}"
-            : $"周额度已重置，{Left(weekLeft)}";
+            ? Strings.FiveHourReset(left(fiveHourLeft))
+            : Strings.WeekReset(left(weekLeft));
     }
 }

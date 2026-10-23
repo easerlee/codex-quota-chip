@@ -33,8 +33,15 @@ public sealed class Settings
     [JsonPropertyName("plate")]
     public bool Plate { get; set; } = true;
 
+    // 界面语言：zh / en。日志和命令行输出不跟着变，它们是给排查用的。
+    [JsonPropertyName("language")]
+    public string Language { get; set; } = "zh";
+
     [JsonIgnore]
     public bool DisplayLeft => string.Equals(DisplaySide, "left", StringComparison.OrdinalIgnoreCase);
+
+    [JsonIgnore]
+    public bool English => string.Equals(Language, "en", StringComparison.OrdinalIgnoreCase);
 
     public Settings Copy() => new()
     {
@@ -43,7 +50,8 @@ public sealed class Settings
         WarnBelow = WarnBelow,
         CriticalBelow = CriticalBelow,
         NotifyOnReset = NotifyOnReset,
-        Plate = Plate
+        Plate = Plate,
+        Language = Language
     };
 
     public void Normalize()
@@ -52,6 +60,7 @@ public sealed class Settings
         WarnBelow = Math.Clamp(WarnBelow, 0, 100);
         CriticalBelow = Math.Clamp(CriticalBelow, 0, WarnBelow);
         DisplaySide = DisplayLeft ? "left" : "right";
+        Language = English ? "en" : "zh";
     }
 }
 

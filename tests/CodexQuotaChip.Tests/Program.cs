@@ -30,7 +30,8 @@ var tests = new (string Name, Action Body)[]
     ("codex.exe path is re-resolved when it disappears", TestExeReResolve),
     ("autostart registry entry", TestAutostart),
     ("account identity from auth.json", TestAccountIdentity),
-    ("account history file", TestAccountFile)
+    ("account history file", TestAccountFile),
+    ("the interface switches language", TestLanguage)
 };
 
 var passed = 0;
@@ -357,6 +358,38 @@ static void TestSettings()
     {
         Directory.Delete(directory, recursive: true);
     }
+}
+
+static void TestLanguage()
+{
+    // The interface is Chinese unless the settings file says otherwise.
+    Strings.Use(null);
+    Equal(false, Strings.English, "no language set means Chinese");
+    Equal("退出", Strings.Exit, "Chinese exit label");
+    Equal("语言", Strings.Language, "Chinese language label");
+
+    Strings.Use("en");
+    Equal(true, Strings.English, "en turns English on");
+    Equal("Exit", Strings.Exit, "English exit label");
+    Equal("Language", Strings.Language, "English language label");
+    Equal("Settings ›", Strings.SettingsRow, "English settings row");
+    Equal("1 reset credit available", Strings.Credits(1), "English singular credit");
+    Equal("2 reset credits available", Strings.Credits(2), "English plural credits");
+
+    // Anything that is not "en" is Chinese, and the file keeps only those two values.
+    Strings.Use("EN");
+    Equal(true, Strings.English, "the language code is case-insensitive");
+    Strings.Use("fr");
+    Equal(false, Strings.English, "an unknown language is Chinese");
+
+    var settings = new Settings { Language = "en" };
+    settings.Normalize();
+    Equal("en", settings.Language, "English survives normalize");
+    settings.Language = "klingon";
+    settings.Normalize();
+    Equal("zh", settings.Language, "an unknown language is stored as Chinese");
+
+    Strings.Use("zh");
 }
 
 static void TestExeReResolve()
