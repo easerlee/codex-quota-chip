@@ -79,13 +79,18 @@ internal sealed class AppServer : IDisposable
         return new AppServer(process);
     }
 
+    // The version the app actually is, not a string that was true once: this goes out to codex on
+    // every start, and a stale one makes its logs lie about who is asking.
+    private static string ClientVersion =>
+        typeof(QuotaClient).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+
     public async Task InitializeAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
         await CallAsync(
             "initialize",
             new
             {
-                clientInfo = new { name = "codex-quota-chip", version = "0.1.0" },
+                clientInfo = new { name = "codex-quota-chip", version = ClientVersion },
                 capabilities = new { experimentalApi = true }
             },
             timeout,

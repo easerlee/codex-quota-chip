@@ -145,6 +145,18 @@ public sealed class ChipPanel : Border
         _rows.Children.Add(CommandRow("设置 ›", _openSettings));
         _rows.Children.Add(Divider());
         _rows.Children.Add(CommandRow("退出", _exit, danger: true));
+        _rows.Children.Add(VersionRow());
+    }
+
+    // 面板底部写一行版本号。排查时第一件事就是确认「现在跑的是哪一版」——「改完没重启」这种事，
+    // 看一眼面板就能排除。
+    private static UIElement VersionRow()
+    {
+        var version = typeof(ChipPanel).Assembly.GetName().Version;
+        var label = Caption(version is null ? "dev" : $"v{version.ToString(3)}", Theme.Panel.Dim, 10.5);
+        label.HorizontalAlignment = HorizontalAlignment.Right;
+        label.Margin = new Thickness(RowInset, 2, RowInset, 0);
+        return label;
     }
 
     private void BuildSettings()
