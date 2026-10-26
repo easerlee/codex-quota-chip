@@ -968,6 +968,8 @@ public partial class MainWindow : Window
             return false;
         }
 
-        return Fullscreen.Covers(Win32.WindowClass(root), rect, Win32.MonitorBounds(root));
+        // 比的是「浮窗所在那块屏」，不是窗口自己那块屏：副屏上最大化的窗口盖的是副屏，主屏任务栏上的
+        // 浮窗没被挡住，不该让位。用 MonitorBounds(root) 会把副屏的窗口也算成全屏。
+        return Fullscreen.Covers(Win32.WindowClass(root), rect, Win32.MonitorBounds(_handle));
     }
 }

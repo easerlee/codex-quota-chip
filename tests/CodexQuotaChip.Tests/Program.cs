@@ -31,7 +31,8 @@ var tests = new (string Name, Action Body)[]
     ("autostart registry entry", TestAutostart),
     ("account identity from auth.json", TestAccountIdentity),
     ("account history file", TestAccountFile),
-    ("the interface switches language", TestLanguage)
+    ("the interface switches language", TestLanguage),
+    ("a second monitor's window does not park the chip", TestDualMonitor)
 };
 
 var passed = 0;
@@ -390,6 +391,31 @@ static void TestLanguage()
     Equal("zh", settings.Language, "an unknown language is stored as Chinese");
 
     Strings.Use("zh");
+}
+
+static void TestDualMonitor()
+{
+    // 主屏 3440x1440 在原点，副屏 1080x1920 挂在左边。
+    var primary = new Win32.Rect { Left = 0, Top = 0, Right = 3440, Bottom = 1440 };
+    var secondary = new Win32.Rect { Left = -1080, Top = 0, Right = 0, Bottom = 1920 };
+
+    // 副屏上最大化的窗口（盖住副屏，不碰主屏）不该让浮窗让位 —— 这是双屏时那个 bug 的样子。
+    var maximisedOnSecondary = new Win32.Rect { Left = -1080, Top = 0, Right = 0, Bottom = 1920 };
+    Equal(false, Fullscreen.ParksChip("Chrome_WidgetWin_1", maximisedOnSecondary, primary),
+        "a window covering the other monitor leaves the chip alone");
+
+    // 主屏上的全屏程序仍然让它让位。
+    var fullscreenOnPrimary = new Win32.Rect { Left = 0, Top = 0, Right = 3440, Bottom = 1440 };
+    Equal(true, Fullscreen.ParksChip("mpv", fullscreenOnPrimary, primary),
+        "a fullscreen app on the chip's own monitor still parks it");
+
+    // 最大化窗口停在任务栏上方，不算盖住整块屏。
+    var maximisedOnPrimary = new Win32.Rect { Left = 0, Top = 0, Right = 3440, Bottom = 1392 };
+    Equal(false, Fullscreen.ParksChip("Chrome_WidgetWin_1", maximisedOnPrimary, primary),
+        "a maximised window that stops above the taskbar does not park it");
+
+    // 桌面和任务栏自己永远不算。
+    Equal(false, Fullscreen.ParksChip("Progman", primary, primary), "the desktop never parks the chip");
 }
 
 static void TestExeReResolve()
