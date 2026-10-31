@@ -143,6 +143,7 @@ public sealed class ChipPanel : Border
                 now));
             _rows.Children.Add(Metric("5H", account.FiveHourLeft, account.FiveHourResetsAt, now, _settings, weekly: false, valueWidth, resetWidth));
             _rows.Children.Add(Metric("WK", account.WeekLeft, account.WeekResetsAt, now, _settings, weekly: true, valueWidth, resetWidth));
+            _rows.Children.Add(ExpiryRow(account.PlanUntil));
         }
 
         _rows.Children.Add(Divider());
@@ -243,6 +244,15 @@ public sealed class ChipPanel : Border
     // Sits right after the name of the account that is logged in now, so the rows under it read as
     // "these numbers belong to the live one".
     public static string CurrentMarker => Strings.Current;
+
+    // 每个账号最后一行：订阅到期日（年月日）。只有「这个账号当时是登录状态」才读得到，所以历史账号
+    // 在它再次被读到之前显示破折号 —— 不编日期。
+    private static UIElement ExpiryRow(long? planUntil)
+    {
+        var row = Caption(Strings.Expiry(planUntil), Theme.Panel.Dim, 10.5);
+        row.Margin = new Thickness(RowInset, 1, RowInset, 6);
+        return row;
+    }
 
     // The account name, with that account's reset tickets sitting on the right-hand edge of the
     // row - the same edge the metrics' reset column ends on. A right-aligned strip grows leftwards,

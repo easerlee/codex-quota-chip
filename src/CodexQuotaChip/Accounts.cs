@@ -13,7 +13,8 @@ public sealed record AccountRecord(
     double? WeekLeft,
     long? WeekResetsAt,
     int? ResetCredits = null,
-    long? ResetCreditsExpireAt = null);
+    long? ResetCreditsExpireAt = null,
+    long? PlanUntil = null);
 
 // One record per account, rewritten in place: because the key is the account, switching away
 // leaves the old record exactly as it was, which is the point - it shows what that account had
@@ -101,7 +102,7 @@ public static class AccountOrder
 
 // Which account the CLI is logged in as, read from its own auth file. Strictly read-only: this
 // app never writes, refreshes or logs credentials.
-public sealed record AccountIdentity(string Id, string? Email, string? Plan)
+public sealed record AccountIdentity(string Id, string? Email, string? Plan, long? PlanUntil = null)
 {
     public static string Label(string? email, string id)
     {
@@ -142,11 +143,14 @@ public sealed record AccountIdentity(string Id, string? Email, string? Plan)
             var claims = Claims(Text(tokens, "id_token"));
             var email = claims.HasValue ? Text(claims.Value, "email") : null;
             string? plan = null;
+            long? planUntil = null;
             if (claims.HasValue &&
                 claims.Value.TryGetProperty("https://api.openai.com/auth", out var auth) &&
                 auth.ValueKind == JsonValueKind.Object)
             {
                 plan = Text(auth, "chatgpt_plan_type");
+                // 订阅到期时间，形如 2026-11-02T06:37:16+00:00。读不到就是 null，不编。
+                planUntil = Moment(Text(auth, "chatgpt_subscription_active_until"));
             }
 
             if (string.IsNullOrWhiteSpace(id) && string.IsNullOrWhiteSpace(email))
@@ -154,7 +158,7 @@ public sealed record AccountIdentity(string Id, string? Email, string? Plan)
                 return null;
             }
 
-            return new AccountIdentity(string.IsNullOrWhiteSpace(id) ? email! : id!, email, plan);
+            return new AccountIdentity(string.IsNullOrWhiteSpace(id) ? email! : id!, email, plan, planUntil);
         }
         catch (JsonException)
         {
@@ -190,4 +194,14 @@ public sealed record AccountIdentity(string Id, string? Email, string? Plan)
 
     private static string? Text(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+
+    // ISO-8601 时间戳（2026-11-02T06:37:16+00:00）转 Unix 秒。读不懂就是没有，不猜。
+    private static long? Moment(string? text) =>
+        DateTimeOffset.TryParse(
+            text,
+            System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal,
+            out var when)
+            ? when.ToUnixTimeSeconds()
+            : null;
 }

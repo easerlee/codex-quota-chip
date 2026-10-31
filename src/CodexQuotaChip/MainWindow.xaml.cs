@@ -615,7 +615,9 @@ public partial class MainWindow : Window
             reading.Weekly?.RemainingPercent,
             reading.Weekly?.ResetsAt,
             reading.Resets?.Available,
-            reading.Resets?.ExpiresAt));
+            reading.Resets?.ExpiresAt,
+            // 订阅到期日只在「这个账号是当前登录」时读得到（id_token 里），所以随记录存下来。
+            identity.PlanUntil));
 
         if (rollover.Any && _settings.NotifyOnReset)
         {

@@ -32,6 +32,12 @@ public static class Strings
 
     public static string ResetLabel => T("已重置", "reset");
 
+    // 账号订阅到期日。读不到就是读不到，用破折号，不编日期。
+    public static string Expiry(long? unix) => unix is long at
+        ? T($"到期 {DateTimeOffset.FromUnixTimeSeconds(at).ToLocalTime():yyyy-MM-dd}",
+            $"Expires {DateTimeOffset.FromUnixTimeSeconds(at).ToLocalTime():yyyy-MM-dd}")
+        : T("到期 —", "Expires —");
+
     // ---------------------------------------------------------------- 设置层
 
     public static string RefreshInterval => T("刷新间隔", "Refresh");
