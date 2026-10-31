@@ -309,15 +309,26 @@ static void TestAutoHide()
     Equal(true, Placement.Retracted(leftHidden, 1920, 1080), "a retracted vertical bar does not");
 }
 
-// The two overlay bars must start at the same x, so their range may depend on the row geometry
-// only - never on how wide the label happened to measure.
+// The two overlay bars must start at the same x and end at the same x, so their range may depend on
+// the row geometry only - never on how wide the label happened to measure, and never on how many
+// digits the percentage has.
 static void TestBarGeometry()
 {
-    Equal(GaugeRow.BarRange(116, 16), GaugeRow.BarRange(116, 16), "same geometry, same bar");
-    var narrow = GaugeRow.BarRange(116, 12);
-    var tall = GaugeRow.BarRange(116, 20);
+    var column16 = GaugeRow.PercentWidth(16, 1.0);
+    Equal(GaugeRow.BarRange(116, 16, column16), GaugeRow.BarRange(116, 16, column16), "same geometry, same bar");
+
+    var narrow = GaugeRow.BarRange(116, 12, GaugeRow.PercentWidth(12, 1.0));
+    var tall = GaugeRow.BarRange(116, 20, GaugeRow.PercentWidth(20, 1.0));
     Equal(true, tall.Left >= narrow.Left, "a taller row never starts its bar further left");
-    Equal(108.0, narrow.Right, "the bar ends as far inside the row as the label starts");
+
+    // The bar stops short of the percentage column, which is what keeps "100%" off the bar.
+    Equal(116.0 - 8 - column16 - 4, GaugeRow.BarRange(116, 16, column16).Right,
+        "the bar ends where the percentage column starts");
+    Equal(true, GaugeRow.BarRange(143, 15, GaugeRow.PercentWidth(15, 1.0)).Right < 143 - 8,
+        "the bar leaves room on the right of a real card");
+
+    // Same row height means the same column width - the shortening cannot differ between 5H and WK.
+    Equal(GaugeRow.PercentWidth(15, 1.0), GaugeRow.PercentWidth(15, 1.0), "both rows reserve the same column");
 }
 
 static void TestDismiss()
