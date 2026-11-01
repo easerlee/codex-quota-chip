@@ -15,6 +15,9 @@ public partial class MainWindow : Window
     // The gap between the card and the settings layer that opens beside it.
     private const double SettingsGap = 8;
 
+    // 悬停提示与浮窗之间的空隙。
+    private const double ToolTipGap = 6;
+
     // Root's Margin in MainWindow.xaml, repeated here because the strip's width is worked out before
     // there is a layout to read it from.
     private const double StripMarginX = 3;
@@ -86,6 +89,13 @@ public partial class MainWindow : Window
         // actions have to be a tooltip of their own. The window is not click-through - it keeps the
         // mouse messages it needs for this (and for the panel's click-outside rule).
         _tip = new ToolTip { Content = Strings.Tip };
+        // 提示放在浮窗正上方，像系统自己的任务栏提示那样，而不是压在浮窗上 —— 压在浮窗上两边都看不清。
+        _tip.PlacementTarget = this;
+        _tip.Placement = PlacementMode.Custom;
+        _tip.CustomPopupPlacementCallback = (popup, target, _) =>
+            [new CustomPopupPlacement(
+                new Point(Math.Max(0, (target.Width - popup.Width) / 2), -popup.Height - ToolTipGap),
+                PopupPrimaryAxis.Horizontal)];
         ToolTip = _tip;
         ToolTipService.SetInitialShowDelay(this, 300);
         ToolTipService.SetShowDuration(this, 10000);
