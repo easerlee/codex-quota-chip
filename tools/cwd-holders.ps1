@@ -138,8 +138,11 @@ $rows = foreach ($process in Get-Process -ErrorAction SilentlyContinue) {
 
 $inside = @($rows | Where-Object { $_.Cwd -like "$Prefix*" })
 $offenders = @($inside | Where-Object { -not $_.Ignored })
+$own = @($inside | Where-Object { $_.Ignored -and $_.Name -like 'DeepSeek Harness*' })
+$shells = @($inside | Where-Object { $_.Ignored -and $_.Name -notlike 'DeepSeek Harness*' })
 
-Write-Host ("读了 {0} 个进程的工作目录；cwd 落在 {1} 下的一共 {2} 个，其中已知无害 {3} 个" -f @($rows).Count, $Prefix, $inside.Count, ($inside.Count - $offenders.Count))
+Write-Host ("读了 {0} 个进程的工作目录。" -f @($rows).Count)
+Write-Host ("cwd 落在 {0} 下的共 {1} 个：DSH 自身 {2} 个、当次 shell 及其祖先 {3} 个、第三方 {4} 个。" -f $Prefix, $inside.Count, $own.Count, $shells.Count, $offenders.Count)
 
 if ($offenders.Count -gt 0) {
     Write-Host ''
@@ -149,11 +152,14 @@ if ($offenders.Count -gt 0) {
 }
 
 Write-Host ''
-Write-Host ("✓ 没有任何第三方进程的工作目录落在 {0} 下" -f $Prefix)
-$harmless = $inside | Where-Object { $_.Ignored }
-if (@($harmless).Count -gt 0) {
-    Write-Host '（已按规则忽略：DeepSeek Harness 自身、以及本次 shell 及其祖先）'
-    $harmless | Select-Object Id, Name, Cwd | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+Write-Host ("✓ 没有第三方进程占着 {0} —— 自更新不会被挡。" -f $Prefix)
+if ($own.Count -gt 0) {
+    Write-Host '  下面这些是 DSH 自己的进程，更新前它会先退出，所以不算：'
+    $own | Select-Object Id, Name, Cwd | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
+}
+if ($shells.Count -gt 0) {
+    Write-Host '  下面这些是本次检查所在的 shell（它的 cwd 就是工作区，天经地义）：'
+    $shells | Select-Object Id, Name, Cwd | Format-Table -AutoSize | Out-String -Width 200 | Write-Host
 }
 Write-Host '—— 关注的几个进程 ——'
 $rows | Where-Object { $_.Name -in @('CodexQuotaChip', 'dotnet', 'VBCSCompiler') } |
