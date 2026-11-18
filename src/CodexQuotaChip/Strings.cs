@@ -30,6 +30,9 @@ public static class Strings
     public static string NoAccounts =>
         T("还没有账号记录，取数成功后自动记录", "No accounts yet — recorded after the first successful read");
 
+    // 账号行右侧那个 × 的悬停说明。删除只动本地记录，不动登录状态，所以这句话要说清楚。
+    public static string ForgetAccount => T("删除该账号的记录（不影响登录）", "Forget this account (stays signed in)");
+
     public static string ResetLabel => T("已重置", "reset");
 
     // 账号订阅到期日。读不到就是读不到，用破折号，不编日期。

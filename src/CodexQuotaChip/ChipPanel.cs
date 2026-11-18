@@ -25,6 +25,10 @@ public sealed class ChipPanel : Border
     private const double RowInset = 12;
     private const double PlateHeight = 8;
 
+    // 账号名右侧那个「悬停才出现的 ×」：直径、与名字的间距，都在这里。槽位按它算，见 BuildAccounts。
+    private const double RemoveButtonSize = 14;
+    private const double RemoveGap = 6;
+
     private static readonly FontFamily UiFont = new(TextDrawing.UiFont);
 
     private readonly StackPanel _rows = new();
@@ -47,6 +51,7 @@ public sealed class ChipPanel : Border
     private readonly Action<int> _setRefreshSeconds;
     private readonly Action<string> _setDisplaySide;
     private readonly Action<string> _setLanguage;
+    private readonly Action<string> _forgetAccount;
     private readonly Action _exit;
 
     public ChipPanel(
@@ -57,10 +62,12 @@ public sealed class ChipPanel : Border
         Action<int> setRefreshSeconds,
         Action<string> setDisplaySide,
         Action<string> setLanguage,
+        Action<string> forgetAccount,
         Action openSettings,
         Action exit,
         bool settingsOnly = false)
     {
+        _forgetAccount = forgetAccount;
         _settingsOnly = settingsOnly;
         _refresh = refresh;
         _toggleAutostart = toggleAutostart;
@@ -127,6 +134,11 @@ public sealed class ChipPanel : Border
         var resetWidth = MeasureColumn(ordered, now, MinResetWidth, 12, ResetText);
 
         var first = true;
+        // 一个账号是一整块（名字行 + 5H + WK + 到期日）。鼠标进到这一块里任意位置，名字行最右边的
+        // × 才现形 —— 只认名字那一行的话，用户得先把鼠标精确移上去才知道有得点。
+        // × 用 Visibility.Hidden 占着位置：占位就不改变行宽，鼠标进出时面板不会抖动；Hidden 的
+        // 元素不参与命中测试，所以没悬停时它既看不见也点不到。当前登录账号不给 × —— 它的记录
+        // 下一轮刷新就会写回来，删了等于没删。
         foreach (var account in ordered)
         {
             if (!first)
@@ -135,15 +147,28 @@ public sealed class ChipPanel : Border
             }
 
             first = false;
-            _rows.Children.Add(AccountHead(
+            var current = AccountOrder.IsCurrent(account, _currentId);
+            var remove = current ? null : RemoveButton(() => _forgetAccount(account.Id));
+
+            var block = new StackPanel { Background = Brushes.Transparent };
+            block.Children.Add(AccountHead(
                 AccountIdentity.Label(account.Email, account.Id),
-                AccountOrder.IsCurrent(account, _currentId),
+                current,
                 Freshness.IsLive(account.LastSeenAt, now, _settings.RefreshSeconds),
                 new ResetCredits(account.ResetCredits ?? 0, account.ResetCreditsExpireAt),
-                now));
-            _rows.Children.Add(Metric("5H", account.FiveHourLeft, account.FiveHourResetsAt, now, _settings, weekly: false, valueWidth, resetWidth));
-            _rows.Children.Add(Metric("WK", account.WeekLeft, account.WeekResetsAt, now, _settings, weekly: true, valueWidth, resetWidth));
-            _rows.Children.Add(ExpiryRow(account.PlanUntil));
+                now,
+                remove));
+            block.Children.Add(Metric("5H", account.FiveHourLeft, account.FiveHourResetsAt, now, _settings, weekly: false, valueWidth, resetWidth));
+            block.Children.Add(Metric("WK", account.WeekLeft, account.WeekResetsAt, now, _settings, weekly: true, valueWidth, resetWidth));
+            block.Children.Add(ExpiryRow(account.PlanUntil));
+
+            if (remove is not null)
+            {
+                block.MouseEnter += (_, _) => remove.Visibility = Visibility.Visible;
+                block.MouseLeave += (_, _) => remove.Visibility = Visibility.Hidden;
+            }
+
+            _rows.Children.Add(block);
         }
 
         _rows.Children.Add(Divider());
@@ -257,9 +282,17 @@ public sealed class ChipPanel : Border
     // The account name, with that account's reset tickets sitting on the right-hand edge of the
     // row - the same edge the metrics' reset column ends on. A right-aligned strip grows leftwards,
     // so a second ticket lands to the left of the first.
-    private static UIElement AccountHead(string name, bool current, bool live, ResetCredits resets, DateTimeOffset now)
+    // remove 不为空时，这一行最右边留一个圆圈 × 的位置（悬停由外层整块控制显隐）。最右边的意思
+    // 是和下面 5H/WK 那列时间文字的右边缘对齐 —— 三行共用同一条右边线，看着才是一栏。
+    private Grid AccountHead(string name, bool current, bool live, ResetCredits resets, DateTimeOffset now, FrameworkElement? remove)
     {
         var row = new Grid { Margin = new Thickness(RowInset, 6, RowInset, 4) };
+        // 圆点、账号名、× 三样东西的纵向中线要对齐：行高先定死，再让每个孩子都居中。
+        // 不定行高时，三者各自以「别的孩子撑出来的高度」为准，字号一换就容易看出歪。
+        row.MinHeight = 18;
+        // 透明而不是「没有背景」：没有背景的 Grid 在空白处不参与命中测试，鼠标停在名字与重置券
+        // 之间那一截就收不到 MouseEnter，× 也就不会出现。
+        row.Background = Brushes.Transparent;
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
@@ -286,11 +319,12 @@ public sealed class ChipPanel : Border
             // Small and grey: a marker on the name, not a second name competing with it.
             var marker = Caption(CurrentMarker, Theme.Panel.Dim, 11);
             marker.VerticalAlignment = VerticalAlignment.Center;
-            marker.Margin = new Thickness(5, 1, 0, 0);
+            marker.Margin = new Thickness(5, 0, 0, 0);
             head.Children.Add(marker);
         }
 
         Grid.SetColumn(head, 0);
+        head.VerticalAlignment = VerticalAlignment.Center;
         row.Children.Add(head);
 
         // An expired ticket is one the server no longer counts, so it is not drawn either.
@@ -316,11 +350,62 @@ public sealed class ChipPanel : Border
                 });
             }
 
+            // 有 × 时，重置券让出最右那一格，靠 × 的左边摆；两种元素挤在同一格会叠在一起。
             Grid.SetColumn(tickets, 1);
+            tickets.Margin = new Thickness(0, 0, remove is null ? 0 : RemoveButtonSize + RemoveGap, 0);
             row.Children.Add(tickets);
         }
 
+        if (remove is not null)
+        {
+            // 单独一列、宽度固定，隐藏时也占着：于是 × 出现与否，这一行和整块面板的宽度都不变。
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(RemoveButtonSize) });
+            remove.VerticalAlignment = VerticalAlignment.Center;
+            remove.HorizontalAlignment = HorizontalAlignment.Right;
+            Grid.SetColumn(remove, 2);
+            row.Children.Add(remove);
+        }
+
         return row;
+    }
+
+    // 圆圈 ×：平时 Visibility.Hidden（占位、不画、不接鼠标），鼠标进到这个账号整块才显形。
+    // 点下去直接删记录，不弹确认 —— 这是自己的历史数据，账号重新登录时还会再记下来。
+    private FrameworkElement RemoveButton(Action forget)
+    {
+        var button = new Grid
+        {
+            Width = RemoveButtonSize,
+            Height = RemoveButtonSize,
+            Cursor = Cursors.Hand,
+            Visibility = Visibility.Hidden,
+            ToolTip = Strings.ForgetAccount
+        };
+        button.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Stroke = new SolidColorBrush(Theme.Panel.Dim),
+            StrokeThickness = 1,
+            Fill = Brushes.Transparent
+        });
+        button.Children.Add(new TextBlock
+        {
+            Text = "×",
+            FontFamily = UiFont,
+            FontSize = 9,
+            Foreground = new SolidColorBrush(Theme.Panel.Dim),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            // 字形本身偏上一点，往下推 1px 才在圆圈里居中。
+            Margin = new Thickness(0, -1, 0, 0)
+        });
+
+        button.MouseLeftButtonUp += (_, e) =>
+        {
+            e.Handled = true;
+            forget();
+        };
+
+        return button;
     }
 
     // The ticket comes out of the assembly's resources (see the csproj), so a pack URI, loaded

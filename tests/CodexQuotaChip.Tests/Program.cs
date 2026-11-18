@@ -532,8 +532,21 @@ static void TestAccountFile()
         Equal(2, records.Count, "re-reading one account replaces its record instead of adding one");
         Equal(7.0, records.Single(record => record.Id == "a").FiveHourLeft, "and keeps the newer values");
 
+        // 删除只影响指名的那一条，大小写不敏感（账号 id 在不同来源里的写法并不统一）。
+        store.Remove("A");
+        records = store.Load();
+        Equal(1, records.Count, "forgetting an account drops just that record");
+        Equal("b", records[0].Id, "and leaves the other one alone");
+        Equal(10.0, records[0].FiveHourLeft, "with its values untouched");
+
+        // 删不存在的账号是空操作，不能把文件改坏。
+        store.Remove("nobody");
+        Equal(1, store.Load().Count, "forgetting an unknown id changes nothing");
+
         File.WriteAllText(path, "{ broken");
         Equal(0, store.Load().Count, "a corrupt file reads as empty instead of throwing");
+        store.Remove("b");
+        Equal(0, store.Load().Count, "and forgetting from a corrupt file does not throw either");
     }
     finally
     {

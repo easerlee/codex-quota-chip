@@ -174,8 +174,8 @@ public partial class MainWindow : Window
 
     private void BuildPanel()
     {
-        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ToggleSettingsLayer, Exit);
-        _settingsPanel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ToggleSettingsLayer, Exit, settingsOnly: true);
+        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ForgetAccount, ToggleSettingsLayer, Exit);
+        _settingsPanel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ForgetAccount, ToggleSettingsLayer, Exit, settingsOnly: true);
 
         _popup.PlacementTarget = this;
         _popup.Placement = PlacementMode.Custom;
@@ -744,6 +744,16 @@ public partial class MainWindow : Window
         {
             _settingsPanel?.Fill(accounts, current, _settings, autostart);
         }
+    }
+
+    // 删掉一个账号的历史记录，只动 accounts.json。codex 的登录凭据这个程序从不写入，所以账号仍然
+    // 处于登录状态；若它正好是当前登录的那个，下一轮刷新会重新记下它 —— 但面板不给当前账号画这个
+    // ×，所以正常路径走不到这里。
+    private void ForgetAccount(string id)
+    {
+        _accounts.Remove(id);
+        _log.Info($"forgot account {id}");
+        FillPanels();
     }
 
     // Returns the state the registry ended up in, so the switch shows the truth rather than the

@@ -55,21 +55,43 @@ public sealed class AccountFile
                 .Where(existing => !string.Equals(existing.Id, record.Id, StringComparison.OrdinalIgnoreCase))
                 .ToList();
             records.Add(record);
-
-            var directory = Path.GetDirectoryName(_path);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-
-            var temp = _path + ".tmp";
-            File.WriteAllText(temp, JsonSerializer.Serialize(records, Json));
-            File.Move(temp, _path, true);
+            Write(records);
         }
         catch (Exception)
         {
             // Remembering accounts is a convenience; it must never break a refresh.
         }
+    }
+
+    // Forgets one account's history. Only this file is touched: the codex login and its credentials
+    // are never written by this app, so the account stays logged in - it just stops being listed.
+    public void Remove(string id)
+    {
+        try
+        {
+            var records = Load()
+                .Where(existing => !string.Equals(existing.Id, id, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            Write(records);
+        }
+        catch (Exception)
+        {
+            // Same rule as above: forgetting is a convenience, never a failure to report.
+        }
+    }
+
+    private void Write(List<AccountRecord> records)
+    {
+        var directory = Path.GetDirectoryName(_path);
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        // Written to a temporary file first, so a half-written file never replaces a good one.
+        var temp = _path + ".tmp";
+        File.WriteAllText(temp, JsonSerializer.Serialize(records, Json));
+        File.Move(temp, _path, true);
     }
 }
 
