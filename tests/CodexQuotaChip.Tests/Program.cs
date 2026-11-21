@@ -34,7 +34,8 @@ var tests = new (string Name, Action Body)[]
     ("the interface switches language", TestLanguage),
     ("a second monitor's window does not park the chip", TestDualMonitor),
     ("work idle enough arms the shutdown", TestShutdownAfterWork),
-    ("the probe reads turns, not mtimes", TestCodexWorkProbe)
+    ("the probe reads turns, not mtimes", TestCodexWorkProbe),
+    ("the waiting dots cycle one to three", TestDots)
 };
 
 var passed = 0;
@@ -552,6 +553,18 @@ static string Repeat(string line, int times)
     }
 
     return builder.ToString();
+}
+
+// 状态行后面那三个点：1 → 2 → 3 → 1，不多不少。
+static void TestDots()
+{
+    Equal(2, Dots.Next(1), "one dot goes to two");
+    Equal(3, Dots.Next(2), "two goes to three");
+    Equal(1, Dots.Next(3), "three wraps back to one");
+    Equal(".", Dots.Of(1), "one dot is one dot");
+    Equal("...", Dots.Of(3), "three dots is three dots");
+    Equal("...", Dots.Of(9), "more than three is still three");
+    Equal(".", Dots.Of(0), "zero is clamped to one");
 }
 
 static string WriteTemp(string content, double ageSeconds)

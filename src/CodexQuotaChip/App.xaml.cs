@@ -61,6 +61,10 @@ public partial class App : Application
             return;
         }
 
+        // 反复启停会留下上一个没退干净的进程：窗口还在、图标还挂着、怎么点都没反应。启动时先收掉
+        // 它们，再去拿互斥量 —— 顺序反了就没机会收：旧进程还握着互斥量，新进程只会自己退出。
+        ReapLingering(paths, _log);
+
         _instance = new Win32.SingleInstance();
         if (!_instance.TryAcquire(MutexName))
         {
@@ -73,6 +77,45 @@ public partial class App : Application
         var window = new MainWindow(paths, codexHome, settings, _log, codexExe, Has(e.Args, "--shutdown-dry-run"));
         MainWindow = window;
         window.Show();
+    }
+
+    // 收掉上一次留下的进程，顺带删掉写了一半的临时文件（写设置/账号时中断会留 .tmp）。
+    private static void ReapLingering(Paths paths, Log log)
+    {
+        foreach (var other in System.Diagnostics.Process.GetProcessesByName("CodexQuotaChip"))
+        {
+            if (other.Id == Environment.ProcessId)
+            {
+                continue;
+            }
+
+            try
+            {
+                other.Kill(entireProcessTree: true);
+                other.WaitForExit(2000);
+                log.Info($"stopped a lingering instance {other.Id}");
+            }
+            catch (Exception error)
+            {
+                log.Warn($"could not stop instance {other.Id}: {error.Message}");
+            }
+        }
+
+        foreach (var temp in new[] { paths.Accounts + ".tmp", paths.Settings + ".tmp" })
+        {
+            try
+            {
+                if (File.Exists(temp))
+                {
+                    File.Delete(temp);
+                    log.Info($"removed leftover {Path.GetFileName(temp)}");
+                }
+            }
+            catch (Exception error)
+            {
+                log.Warn($"leftover {Path.GetFileName(temp)} not removed: {error.Message}");
+            }
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)

@@ -78,6 +78,11 @@ public partial class MainWindow : Window
     // 上一次切换这个开关的时间，用来吃掉重复的同一次点击。
     private DateTimeOffset? _shutdownToggledAt;
 
+    // 状态行那句「不带点」的话，和当前画到第几个点（1..3）。点只是装饰，判定结论在 _shutdownBase 里。
+    private readonly DispatcherTimer _dotsTimer = new();
+    private string _shutdownBase = string.Empty;
+    private int _dots = 1;
+
     public MainWindow(Paths paths, string codexHome, Settings settings, Log log, CodexExe codexExe, bool shutdownDryRun = false)
     {
         _paths = paths;
@@ -186,6 +191,10 @@ public partial class MainWindow : Window
         _placementTimer.Interval = TimeSpan.FromSeconds(1);
         _placementTimer.Tick += (_, _) => Snap();
         _placementTimer.Start();
+
+        // 状态行后面那三个点：1 → 2 → 3 → 1，只改文字，不重建面板。
+        _dotsTimer.Interval = TimeSpan.FromMilliseconds(400);
+        _dotsTimer.Tick += (_, _) => StepDots();
 
         // Runs only while the panel is open; see Dismiss for why the panel watches the mouse.
         _panelGuard.Interval = TimeSpan.FromMilliseconds(80);
@@ -535,6 +544,7 @@ public partial class MainWindow : Window
             }
 
             // 面板开着时让那行字跟着走：只要改文字，不重建面板。
+            _shutdownBase = ShutdownBase();
             _panel?.RefreshShutdownStatus(ShutdownStatus());
         }
 
@@ -545,6 +555,7 @@ public partial class MainWindow : Window
         }
 
         _armed = false;
+        _dotsTimer.Stop();
         _settings.ShutdownAfterWork = false;
         SettingsFile.Save(_paths.Settings, _settings, _log);
 
@@ -878,6 +889,18 @@ public partial class MainWindow : Window
         _settings.Normalize();
         SettingsFile.Save(_paths.Settings, _settings, _log);
         _armed = _settings.ShutdownAfterWork;
+        // 开着才有那句状态，点也只在开着时走；关掉就把定时器停了，别让它在后台空转。
+        if (_armed)
+        {
+            _shutdownBase = ShutdownBase();
+            _dotsTimer.Start();
+        }
+        else
+        {
+            _dotsTimer.Stop();
+            _dots = 1;
+        }
+
         _log.Info($"shutdown after work {(_settings.ShutdownAfterWork ? "armed" : "off")}");
         FillPanels();
         return _settings.ShutdownAfterWork;
@@ -885,12 +908,22 @@ public partial class MainWindow : Window
 
     // 开关下面那一行：还有多久关机，或者现在卡在哪。证据一起写出来 —— 判定错了，用户能自己看出
     // 是哪个会话在顶着。
-    private string ShutdownStatus() =>
+    private string ShutdownStatus() => _shutdownBase + Dots.Of(_dots);
+
+    // 不带点的结论，交给 _dotsTimer 往上添点。
+    private string ShutdownBase() =>
         CodexWork.Describe(
             _armed,
             _work,
             DateTimeOffset.Now,
             TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes));
+
+    // 1 → 2 → 3 → 1。面板没开时也算一下，开面板第一次画出来的就是当前这一步。
+    private void StepDots()
+    {
+        _dots = Dots.Next(_dots);
+        _panel?.RefreshShutdownStatus(ShutdownStatus());
+    }
 
     // 结束等待时长：改了就立刻按新的阈值算，不用重启。
     private void SetShutdownIdle(int minutes)
