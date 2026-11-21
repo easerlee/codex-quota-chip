@@ -72,12 +72,19 @@ public partial class MainWindow : Window
     private DateTimeOffset? _workCheckedAt;
     private CodexWork.WorkReading? _work;
 
-    public MainWindow(Paths paths, string codexHome, Settings settings, Log log, CodexExe codexExe)
+    // --shutdown-dry-run：走到「该关机了」只写日志，不真的执行。用来验证判定与开关，不怕误关。
+    private readonly bool _shutdownDryRun;
+
+    // 上一次切换这个开关的时间，用来吃掉重复的同一次点击。
+    private DateTimeOffset? _shutdownToggledAt;
+
+    public MainWindow(Paths paths, string codexHome, Settings settings, Log log, CodexExe codexExe, bool shutdownDryRun = false)
     {
         _paths = paths;
         _codexHome = codexHome;
         _settings = settings;
         _log = log;
+        _shutdownDryRun = shutdownDryRun;
         _client = new QuotaClient(codexHome, log, codexExe.Resolve);
         _accounts = new AccountFile(paths.Accounts);
 
@@ -526,6 +533,9 @@ public partial class MainWindow : Window
             {
                 FillPanels();
             }
+
+            // 面板开着时让那行字跟着走：只要改文字，不重建面板。
+            _panel?.RefreshShutdownStatus(ShutdownStatus());
         }
 
         var idle = TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes);
@@ -537,6 +547,14 @@ public partial class MainWindow : Window
         _armed = false;
         _settings.ShutdownAfterWork = false;
         SettingsFile.Save(_paths.Settings, _settings, _log);
+
+        if (_shutdownDryRun)
+        {
+            // 只留证据，不动这台机器。验证「该关的时候真会关、关掉之后真不关」全靠它。
+            _log.Info($"would shut down: work idle for {idle.TotalMinutes:0} min (last {_lastWorkAt:u}) [dry run]");
+            return;
+        }
+
         _log.Info($"work idle for {idle.TotalMinutes:0} min (last {_lastWorkAt:u}), shutting down");
         try
         {
@@ -843,8 +861,19 @@ public partial class MainWindow : Window
 
     // 工作结束后关机。开着才会去看 Codex 动静；关掉 = 取消，什么都不做。
     // 这个会话里的开关状态另存一份，因为它是「同意关机」的意图，不该被上次运行留下的设置直接兑现。
+    //
+    // 250 毫秒防抖：开关行和它下面那行状态都能点到这件事（一个是开、一个是取消），而面板在切换后
+    // 会重建、位置也可能挪动 —— 同一次点击被送进来两次时，来回翻转的结果是「看着点了却没反应」，
+    // 对一个会关机的开关来说，这种不确定不能留。
     private bool ToggleShutdownAfterWork()
     {
+        var now = DateTimeOffset.Now;
+        if (_shutdownToggledAt is { } last && now - last < TimeSpan.FromMilliseconds(250))
+        {
+            return _settings.ShutdownAfterWork;
+        }
+
+        _shutdownToggledAt = now;
         _settings.ShutdownAfterWork = !_settings.ShutdownAfterWork;
         _settings.Normalize();
         SettingsFile.Save(_paths.Settings, _settings, _log);

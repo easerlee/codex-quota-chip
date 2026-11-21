@@ -70,7 +70,7 @@ public partial class App : Application
         }
 
         _log.Info($"started, state in {paths.Root}, codex home {codexHome}, codex.exe {codexExe.Current ?? "(not found)"}");
-        var window = new MainWindow(paths, codexHome, settings, _log, codexExe);
+        var window = new MainWindow(paths, codexHome, settings, _log, codexExe, Has(e.Args, "--shutdown-dry-run"));
         MainWindow = window;
         window.Show();
     }

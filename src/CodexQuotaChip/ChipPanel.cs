@@ -56,6 +56,7 @@ public sealed class ChipPanel : Border
     private readonly Func<bool> _toggleShutdown;
     private readonly Action<int> _setShutdownIdle;
     private readonly Func<string> _shutdownStatus;
+    private TextBlock? _shutdownText;
     private readonly Action _exit;
 
     public ChipPanel(
@@ -265,16 +266,32 @@ public sealed class ChipPanel : Border
 
     private UIElement ShutdownStatusRow()
     {
+        var status = Caption(_shutdownStatus(), Theme.Panel.Ok, 10.5);
+        status.TextAlignment = TextAlignment.Left;
+        status.HorizontalAlignment = HorizontalAlignment.Left;
+        // 面板开着时倒计时不是死的：主窗口每探一次就把这行改一次，不用整块重建 —— 重建会把账号行
+        // 上的悬停状态一起清掉。
+        _shutdownText = status;
         var row = new Border
         {
-            Padding = new Thickness(RowInset + 2, 0, RowInset, 4),
+            // 左内边距和命令行走同一个值，四个字的起点就和「刷新当前账号数据」「设置」对齐。
+            Padding = new Thickness(RowInset, 0, RowInset, 4),
             Background = Brushes.Transparent,
             Cursor = Cursors.Hand,
-            Child = Caption(_shutdownStatus(), Theme.Panel.Dim, 10.5)
+            Child = status
         };
         // 点一下 = 取消。取消就是把开关关掉，下一拍就不再看它了。
         row.MouseLeftButtonUp += (_, _) => _toggleShutdown();
         return row;
+    }
+
+    // 下一拍有新结论时只改这一行的字，不动整个面板。
+    public void RefreshShutdownStatus(string text)
+    {
+        if (_shutdownText is not null)
+        {
+            _shutdownText.Text = text;
+        }
     }
 
     private Segmented IntervalPicker(int currentSeconds)
