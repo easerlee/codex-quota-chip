@@ -45,6 +45,15 @@ public partial class App : Application
             return;
         }
 
+        // --work-check: 只读地跑一遍「Codex 还活着吗」的判定，把结论和每份文件的证据打出来。
+        // 用来核对判定，不关机、不改任何设置。
+        if (Has(e.Args, "--work-check"))
+        {
+            WorkCheck(codexHome);
+            Shutdown();
+            return;
+        }
+
         if (Has(e.Args, "--notify-test"))
         {
             NotifyTest(_log);
@@ -108,6 +117,28 @@ public partial class App : Application
             plan = reading.PlanType,
             error = reading.Error
         }, new JsonSerializerOptions { WriteIndented = true }));
+    }
+
+    private static void WorkCheck(string codexHome)
+    {
+        Win32.AttachToParentConsole();
+        var now = DateTimeOffset.Now;
+        var reading = CodexWork.Inspect(codexHome, now);
+        Console.WriteLine($"busy    : {(reading.Busy ? "yes" : "no")}");
+        Console.WriteLine($"tag     : {reading.Tag}");
+        Console.WriteLine($"evidence: {reading.Evidence}");
+        Console.WriteLine($"last    : {(reading.LastActivity is { } at ? at.ToLocalTime().ToString("u") : "(none)")}");
+        Console.WriteLine($"beats   : {string.Join(", ", CodexWork.HeartbeatThreads(codexHome))}");
+
+        // 每份文件的证据行：判定错了，能一眼看出是哪个会话在顶。
+        foreach (var file in CodexWork.RecentSessions(codexHome))
+        {
+            var state = CodexWork.Read(file.FullName);
+            var age = (now.UtcDateTime - file.LastWriteTimeUtc).TotalSeconds;
+            var (busy, tag) = CodexWork.Classify(state, age);
+            Console.WriteLine(
+                $"  {(busy ? "BUSY" : "    ")} {tag,-10} age={age,8:0}s open={(state.Open ? 1 : 0)} write={(state.Write ? 1 : 0)} hb={(state.Heartbeat ? 1 : 0)} quota={(state.Quota ? 1 : 0)} {file.Name}");
+        }
     }
 
     // --notify-test: prove the notification works without waiting for a real reset. It needs a

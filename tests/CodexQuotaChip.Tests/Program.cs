@@ -33,7 +33,8 @@ var tests = new (string Name, Action Body)[]
     ("account history file", TestAccountFile),
     ("the interface switches language", TestLanguage),
     ("a second monitor's window does not park the chip", TestDualMonitor),
-    ("work idle enough arms the shutdown", TestShutdownAfterWork)
+    ("work idle enough arms the shutdown", TestShutdownAfterWork),
+    ("the probe reads turns, not mtimes", TestCodexWorkProbe)
 };
 
 var passed = 0;
@@ -443,15 +444,21 @@ static void TestShutdownAfterWork()
     Equal(false, CodexWork.TimeToShutdown(null, now, idle), "no activity seen at all never shuts down");
 
     Strings.Use("zh");
-    Equal(CodexWork.Describe(false, now.AddHours(-1), now, idle, false) == Strings.ShutdownOff, true,
+    Equal(CodexWork.Describe(false, null, now, idle) == Strings.ShutdownOff, true,
         "switched off reads off, even when the machine has been quiet for hours");
-    Equal(CodexWork.Describe(true, null, now, idle, false) == Strings.ShutdownNoActivity, true,
+    Equal(CodexWork.Describe(true, null, now, idle) == Strings.ShutdownNoActivity, true,
         "switched on without a reading says so");
-    Equal(CodexWork.Describe(true, now.AddMinutes(-3), now, idle, true) == Strings.ShutdownWaitingScheduled, true,
-        "a scheduled automation is called out instead of counting down");
-    Equal(CodexWork.Describe(true, now.AddMinutes(-3), now, idle, false), Strings.ShutdownIn("2m"),
+
+    var quiet = new CodexWork.WorkReading(false, "idle", "open=0 newest=180s tag=idle", now.AddMinutes(-3));
+    Equal(CodexWork.Describe(true, quiet, now, idle), Strings.ShutdownIn("2m"),
         "three quiet minutes against a five minute threshold leaves two");
-    Equal(CodexWork.Describe(true, now.AddMinutes(-9), now, idle, false) == Strings.ShutdownAboutTo, true,
+
+    var busy = new CodexWork.WorkReading(true, "open", "open=1 newest=6s tag=open", now);
+    Equal(true, CodexWork.Describe(true, busy, now, idle).StartsWith(Strings.ShutdownBusy, StringComparison.Ordinal),
+        "a working Codex is named as such, not counted down");
+
+    var nearly = new CodexWork.WorkReading(false, "idle", "open=0 newest=540s tag=idle", now.AddMinutes(-9));
+    Equal(CodexWork.Describe(true, nearly, now, idle) == Strings.ShutdownAboutTo, true,
         "long past the threshold reads as now");
 
     Equal("2m", Readout.Duration(TimeSpan.FromMinutes(2)), "durations under an hour");
@@ -462,6 +469,92 @@ static void TestShutdownAfterWork()
     Equal("5,10,15", string.Join(",", ChipPanel.IdleChoices(10)), "ten minutes is one of the choices");
     var extra = ChipPanel.IdleChoices(7);
     Equal(true, extra.Contains(7) && extra.Count == 4, "a value from the settings file gets a slot of its own");
+}
+
+// 方案第 8 节的用例，规则本身是纯函数，所以能逐条钉住。
+static void TestCodexWorkProbe()
+{
+    const string StartedA = """{"type":"event_msg","payload":{"type":"task_started","turn_id":"a"}}""";
+    const string CompleteA = """{"type":"event_msg","payload":{"type":"task_complete","turn_id":"a"}}""";
+    const string StartedB = """{"type":"event_msg","payload":{"type":"task_started","turn_id":"b"}}""";
+    const string Patch = """{"type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch"}}""";
+    const string QuotaLine = """{"type":"event_msg","payload":{"type":"task_complete","turn_id":"a","message":"usage limit reached"}}""";
+    const string BeatLine = """{"type":"event_msg","payload":{"type":"task_started","message":"<heartbeat>"}}""";
+
+    // 1) 回合开着，文件 30 秒前写过 → 忙。
+    var open = CodexWork.Scan(string.Join("\n", StartedA));
+    Equal(true, open.Open, "an unpaired task_started leaves the turn open");
+    Equal((true, "open"), CodexWork.Classify(open, 30), "a live open turn is busy");
+
+    // 2) task_complete 已出现，文件 5 分钟没动 → 闲。
+    var done = CodexWork.Scan(string.Join("\n", StartedA, CompleteA));
+    Equal(false, done.Open, "the matching task_complete closes it");
+    Equal(true, done.LastComplete, "and the turn is known to have ended");
+    Equal((false, "idle"), CodexWork.Classify(done, 300), "a closed turn five minutes ago is idle");
+
+    // 3) 心跳自动化只轮询、不写东西 → 闲。
+    var poll = CodexWork.Scan(string.Join("\n", StartedA)) with { Heartbeat = true };
+    Equal((false, "hb-poll"), CodexWork.Classify(poll, 10), "a heartbeat that only polls does not count as work");
+
+    // 4) 心跳线程确实在写补丁 → 忙。
+    var construct = CodexWork.Scan(string.Join("\n", StartedA, Patch)) with { Heartbeat = true };
+    Equal(true, construct.Write, "the patch call is seen as a write");
+    Equal((true, "hb-work"), CodexWork.Classify(construct, 10), "a heartbeat that writes is still work");
+
+    // 5) 尾巴里没有 turn 事件、文件 1 分钟前写过 → 忙（回扫或 fail-safe）。
+    var blank = CodexWork.Scan(string.Empty);
+    Equal(false, blank.SawTurn, "nothing to read means no turn seen");
+    Equal((false, "idle"), CodexWork.Classify(blank, 60), "the class alone says idle");
+    Equal(true, CodexWork.Read(WriteTemp("no turn events at all\n", 60)).Open,
+        "a file written a minute ago with no turn events is taken as still running");
+
+    // 6) 同样没有 turn 事件，但文件两小时没动 → 闲。
+    Equal(false, CodexWork.Read(WriteTemp("no turn events at all\n", 7200)).Open,
+        "the same file two hours old is just an old log");
+
+    // 7) 回合开着但文件 25 分钟未动 → 闲（挂死的残局）。
+    Equal((false, "stale-open"), CodexWork.Classify(open, 1500), "an open turn that stopped moving is stale");
+
+    // 8) 额度报错结束的回合 → 闲。
+    var quota = CodexWork.Scan(string.Join("\n", StartedA, QuotaLine));
+    Equal(true, quota.Quota, "the quota message is recognised");
+    Equal((false, "quota"), CodexWork.Classify(quota, 30), "a turn cut off by quota is not work");
+
+    // 回扫：turn 事件在 1.5 MB 工具日志之前，尾巴里一条都没有，仍然要判忙。
+    var buried = WriteTemp(
+        Repeat("x-tool-output\n", 100_000) + StartedA + "\n" + Repeat("y-tool-output\n", 30_000),
+        30);
+    Equal(true, CodexWork.Read(buried).Open, "a turn event behind a wall of tool output is still found");
+
+    // 尾巴读的是最后 400 KB，不是整份文件。
+    Equal(true, CodexWork.ReadTail(buried, 400_000).Contains("y-tool-output"), "the tail starts near the end");
+
+    // 字节运算用 long：偏移量超过 int 上限也不能抛。
+    var big = WriteTemp("head\n" + Repeat("z-tool-output\n", 150_000), 30);
+    Equal(true, CodexWork.ReadTail(big, 400_000).Contains("z-tool-output"), "reading a file bigger than int offsets works");
+
+    // 第三个布尔是心跳标记：回扫时也要认出来。
+    Equal(true, CodexWork.ScanBack(WriteTemp(BeatLine + "\n" + Repeat("q\n", 10), 30)).Heartbeat,
+        "the scan-back also notices heartbeat markers");
+}
+
+static string Repeat(string line, int times)
+{
+    var builder = new System.Text.StringBuilder(line.Length * times);
+    for (var index = 0; index < times; index++)
+    {
+        builder.Append(line);
+    }
+
+    return builder.ToString();
+}
+
+static string WriteTemp(string content, double ageSeconds)
+{
+    var path = Path.Combine(Path.GetTempPath(), "cqc-work-" + Guid.NewGuid().ToString("N") + ".jsonl");
+    File.WriteAllText(path, content);
+    File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(-ageSeconds));
+    return path;
 }
 
 static void TestExeReResolve()

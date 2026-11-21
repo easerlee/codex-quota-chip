@@ -69,8 +69,8 @@ public static class Strings
 
     public static string ShutdownNoActivity => T("还没读到 Codex 动静", "no Codex activity yet");
 
-    public static string ShutdownWaitingScheduled =>
-        T("自动任务开着，会一直续命 —— 先停掉它", "a scheduled automation keeps running — stop it first");
+    // 在干活时把证据一起显示：open=1 说明有一个回合还开着，tag 说明是哪条规则判的忙。
+    public static string ShutdownBusy => T("Codex 在干活", "Codex is working");
 
     public static string ShutdownIn(string left) =>
         English ? $"{left} — click to cancel" : $"{left} 后关机 — 点这里取消";

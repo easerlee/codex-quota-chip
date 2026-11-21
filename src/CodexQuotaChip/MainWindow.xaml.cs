@@ -70,6 +70,7 @@ public partial class MainWindow : Window
     private bool _armed;
     private DateTimeOffset? _lastWorkAt;
     private DateTimeOffset? _workCheckedAt;
+    private CodexWork.WorkReading? _work;
 
     public MainWindow(Paths paths, string codexHome, Settings settings, Log log, CodexExe codexExe)
     {
@@ -488,7 +489,8 @@ public partial class MainWindow : Window
         Render();
     }
 
-    // 每秒看一眼：Codex 还有没有动静。阈值是分钟量级，所以每 5 秒碰一次磁盘就够。
+    // 每 5 秒探一次：阈值是分钟量级，碰这么多磁盘已经够了。
+    // 判定规则全在 CodexWork 里（回合配对、回扫、心跳线程），这里只做计时与执行。
     private void CheckShutdownAfterWork(DateTimeOffset now)
     {
         if (!_armed)
@@ -499,8 +501,14 @@ public partial class MainWindow : Window
         if (_workCheckedAt is null || now - _workCheckedAt.Value >= TimeSpan.FromSeconds(5))
         {
             _workCheckedAt = now;
-            var latest = CodexWork.LastActivity(_codexHome);
-            if (latest is { } at && (_lastWorkAt is null || at > _lastWorkAt))
+            _work = CodexWork.Inspect(_codexHome, now);
+
+            // 任何一个探针报忙，倒计时起点立刻重置 —— 不是扣减也不是累计。
+            if (_work.Busy)
+            {
+                _lastWorkAt = now;
+            }
+            else if (_lastWorkAt is null && _work.LastActivity is { } at)
             {
                 _lastWorkAt = at;
             }
@@ -511,14 +519,8 @@ public partial class MainWindow : Window
             }
         }
 
-        if (CodexWork.ScheduledKeepAlive(_codexHome))
-        {
-            // 自动任务开着 = Codex 会一直被叫醒，等不到「结束」。不关，面板上说清楚。
-            return;
-        }
-
         var idle = TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes);
-        if (!CodexWork.TimeToShutdown(_lastWorkAt, now, idle))
+        if (_work is null || _work.Busy || !CodexWork.TimeToShutdown(_lastWorkAt, now, idle))
         {
             return;
         }
@@ -843,14 +845,14 @@ public partial class MainWindow : Window
         return _settings.ShutdownAfterWork;
     }
 
-    // 开关下面那一行：还有多久关机，或者现在卡在哪。
+    // 开关下面那一行：还有多久关机，或者现在卡在哪。证据一起写出来 —— 判定错了，用户能自己看出
+    // 是哪个会话在顶着。
     private string ShutdownStatus() =>
         CodexWork.Describe(
             _armed,
-            _lastWorkAt,
+            _work,
             DateTimeOffset.Now,
-            TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes),
-            CodexWork.ScheduledKeepAlive(_codexHome));
+            TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes));
 
     // 结束等待时长：改了就立刻按新的阈值算，不用重启。
     private void SetShutdownIdle(int minutes)
