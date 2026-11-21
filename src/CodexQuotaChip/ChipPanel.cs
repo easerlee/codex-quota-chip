@@ -52,6 +52,8 @@ public sealed class ChipPanel : Border
     private readonly Action<string> _setDisplaySide;
     private readonly Action<string> _setLanguage;
     private readonly Action<string> _forgetAccount;
+    private readonly Func<bool> _toggleShutdown;
+    private readonly Func<string> _shutdownStatus;
     private readonly Action _exit;
 
     public ChipPanel(
@@ -63,11 +65,15 @@ public sealed class ChipPanel : Border
         Action<string> setDisplaySide,
         Action<string> setLanguage,
         Action<string> forgetAccount,
+        Func<bool> toggleShutdown,
+        Func<string> shutdownStatus,
         Action openSettings,
         Action exit,
         bool settingsOnly = false)
     {
         _forgetAccount = forgetAccount;
+        _toggleShutdown = toggleShutdown;
+        _shutdownStatus = shutdownStatus;
         _settingsOnly = settingsOnly;
         _refresh = refresh;
         _toggleAutostart = toggleAutostart;
@@ -240,9 +246,30 @@ public sealed class ChipPanel : Border
         _rows.Children.Add(SwitchRow(Strings.Plate, _settings.Plate, _togglePlate));
         _rows.Children.Add(AutostartRow(_autostart));
         _rows.Children.Add(SwitchRow(Strings.NotifyOnReset, _settings.NotifyOnReset, _toggleNotifications));
+        // 工作结束后关机：开关下面挂一行状态（还有多久 / 卡在哪儿），点它就取消。
+        _rows.Children.Add(SwitchRow(Strings.ShutdownRow, _settings.ShutdownAfterWork, _toggleShutdown));
+        if (_settings.ShutdownAfterWork)
+        {
+            _rows.Children.Add(ShutdownStatusRow());
+        }
         // 语言放在最后一行：改它会把两层面板整个重建，所以不夹在中间。
         _rows.Children.Add(SettingRow(Strings.Language, new Segmented(
             ["中", "EN"], _settings.English ? 1 : 0, index => _setLanguage(index == 0 ? "zh" : "en"))));
+    }
+
+    private UIElement ShutdownStatusRow()
+    {
+        var text = Caption(_shutdownStatus(), Theme.Panel.Dim, 10.5);
+        var row = new Border
+        {
+            Padding = new Thickness(RowInset + 2, 0, RowInset, 4),
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Child = text
+        };
+        // 点一下 = 取消。取消就是把开关关掉，下一拍就不再看它了。
+        row.MouseLeftButtonUp += (_, _) => _toggleShutdown();
+        return row;
     }
 
     private Segmented IntervalPicker(int currentSeconds)

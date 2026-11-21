@@ -37,6 +37,14 @@ public sealed class Settings
     [JsonPropertyName("language")]
     public string Language { get; set; } = "zh";
 
+    // 当前工作结束后关机。默认关着 —— 会关掉整台机器的开关，不该自己打开。
+    [JsonPropertyName("shutdown_after_work")]
+    public bool ShutdownAfterWork { get; set; }
+
+    // 静默多久算干完了。
+    [JsonPropertyName("shutdown_idle_minutes")]
+    public int ShutdownIdleMinutes { get; set; } = CodexWork.DefaultIdleMinutes;
+
     [JsonIgnore]
     public bool DisplayLeft => string.Equals(DisplaySide, "left", StringComparison.OrdinalIgnoreCase);
 
@@ -51,7 +59,9 @@ public sealed class Settings
         CriticalBelow = CriticalBelow,
         NotifyOnReset = NotifyOnReset,
         Plate = Plate,
-        Language = Language
+        Language = Language,
+        ShutdownAfterWork = ShutdownAfterWork,
+        ShutdownIdleMinutes = ShutdownIdleMinutes
     };
 
     public void Normalize()
@@ -61,6 +71,7 @@ public sealed class Settings
         CriticalBelow = Math.Clamp(CriticalBelow, 0, WarnBelow);
         DisplaySide = DisplayLeft ? "left" : "right";
         Language = English ? "en" : "zh";
+        ShutdownIdleMinutes = Math.Clamp(ShutdownIdleMinutes, 1, 180);
     }
 }
 

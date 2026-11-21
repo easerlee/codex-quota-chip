@@ -32,7 +32,8 @@ var tests = new (string Name, Action Body)[]
     ("account identity from auth.json", TestAccountIdentity),
     ("account history file", TestAccountFile),
     ("the interface switches language", TestLanguage),
-    ("a second monitor's window does not park the chip", TestDualMonitor)
+    ("a second monitor's window does not park the chip", TestDualMonitor),
+    ("work idle enough arms the shutdown", TestShutdownAfterWork)
 };
 
 var passed = 0;
@@ -427,6 +428,34 @@ static void TestDualMonitor()
 
     // 桌面和任务栏自己永远不算。
     Equal(false, Fullscreen.ParksChip("Progman", primary, primary), "the desktop never parks the chip");
+}
+
+static void TestShutdownAfterWork()
+{
+    var now = DateTimeOffset.Parse("2026-11-22T02:00:00+08:00");
+    var idle = TimeSpan.FromMinutes(5);
+
+    // 刚有动静：不关。
+    Equal(false, CodexWork.TimeToShutdown(now.AddMinutes(-1), now, idle), "work one minute ago is not finished");
+    // 静默够久：关机。
+    Equal(true, CodexWork.TimeToShutdown(now.AddMinutes(-6), now, idle), "six quiet minutes with a five minute threshold is done");
+    // 一次都没看到动静：不关 —— 判断不了它干完没有。
+    Equal(false, CodexWork.TimeToShutdown(null, now, idle), "no activity seen at all never shuts down");
+
+    Strings.Use("zh");
+    Equal(CodexWork.Describe(false, now.AddHours(-1), now, idle, false) == Strings.ShutdownOff, true,
+        "switched off reads off, even when the machine has been quiet for hours");
+    Equal(CodexWork.Describe(true, null, now, idle, false) == Strings.ShutdownNoActivity, true,
+        "switched on without a reading says so");
+    Equal(CodexWork.Describe(true, now.AddMinutes(-3), now, idle, true) == Strings.ShutdownWaitingScheduled, true,
+        "a scheduled automation is called out instead of counting down");
+    Equal(CodexWork.Describe(true, now.AddMinutes(-3), now, idle, false), Strings.ShutdownIn("2m"),
+        "three quiet minutes against a five minute threshold leaves two");
+    Equal(CodexWork.Describe(true, now.AddMinutes(-9), now, idle, false) == Strings.ShutdownAboutTo, true,
+        "long past the threshold reads as now");
+
+    Equal("2m", Readout.Duration(TimeSpan.FromMinutes(2)), "durations under an hour");
+    Equal("3h 12m", Readout.Duration(TimeSpan.FromMinutes(192)), "durations in hours");
 }
 
 static void TestExeReResolve()

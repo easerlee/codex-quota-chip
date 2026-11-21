@@ -59,6 +59,25 @@ public static class Strings
 
     public static string Language => T("语言", "Language");
 
+    // ---------------------------------------------------------------- 工作结束后关机
+
+    public static string ShutdownRow => T("工作结束后关机", "Shut down after work");
+
+    public static string ShutdownOff => T("关", "off");
+
+    public static string ShutdownNoActivity => T("还没读到 Codex 动静", "no Codex activity yet");
+
+    public static string ShutdownWaitingScheduled =>
+        T("自动任务开着，会一直续命 —— 先停掉它", "a scheduled automation keeps running — stop it first");
+
+    public static string ShutdownIn(string left) =>
+        English ? $"{left} — click to cancel" : $"{left} 后关机 — 点这里取消";
+
+    public static string ShutdownAboutTo => T("现在关机 — 点这里取消", "shutting down now — click to cancel");
+
+    public static string ShutdownConfirmed =>
+        T("已收到，Codex 一停就关机", "ok — shutting down when Codex stops");
+
     // ---------------------------------------------------------------- 重置券 / 通知
 
     public static string Credits(int count) => English

@@ -62,6 +62,27 @@ public static class Readout
     // Row text size derived from the row height, so a taller or shorter taskbar stays balanced.
     public static double TextSize(double rowHeight) => Math.Clamp(rowHeight * 0.78, 8.5, 12.0);
 
+    // 大块时间的粗粒度写法，和倒计时同一套：3h 12m / 47m。面板一秒刷一次，不需要秒。
+    public static string Duration(TimeSpan span)
+    {
+        if (span <= TimeSpan.Zero)
+        {
+            return "0m";
+        }
+
+        if (span.TotalDays >= 1)
+        {
+            return $"{(int)span.TotalDays}d {span.Hours}h";
+        }
+
+        if (span.TotalHours >= 1)
+        {
+            return $"{(int)span.TotalHours}h {span.Minutes}m";
+        }
+
+        return $"{Math.Max(1, span.Minutes)}m";
+    }
+
     public static string Compact(string message, int limit = 180)
     {
         var text = message.Trim();

@@ -66,6 +66,11 @@ public partial class MainWindow : Window
     private bool _steppedAside;
     private bool _closing;
 
+    // 「工作结束后关机」。armed 只在这次运行里由用户亲手打开，设置文件里留着上次的值也不自动兑现。
+    private bool _armed;
+    private DateTimeOffset? _lastWorkAt;
+    private DateTimeOffset? _workCheckedAt;
+
     public MainWindow(Paths paths, string codexHome, Settings settings, Log log, CodexExe codexExe)
     {
         _paths = paths;
@@ -174,8 +179,8 @@ public partial class MainWindow : Window
 
     private void BuildPanel()
     {
-        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ForgetAccount, ToggleSettingsLayer, Exit);
-        _settingsPanel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ForgetAccount, ToggleSettingsLayer, Exit, settingsOnly: true);
+        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ForgetAccount, ToggleShutdownAfterWork, ShutdownStatus, ToggleSettingsLayer, Exit);
+        _settingsPanel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ForgetAccount, ToggleShutdownAfterWork, ShutdownStatus, ToggleSettingsLayer, Exit, settingsOnly: true);
 
         _popup.PlacementTarget = this;
         _popup.Placement = PlacementMode.Custom;
@@ -479,7 +484,59 @@ public partial class MainWindow : Window
             StartRead();
         }
 
+        CheckShutdownAfterWork(now);
         Render();
+    }
+
+    // 每秒看一眼：Codex 还有没有动静。阈值是分钟量级，所以每 5 秒碰一次磁盘就够。
+    private void CheckShutdownAfterWork(DateTimeOffset now)
+    {
+        if (!_armed)
+        {
+            return;
+        }
+
+        if (_workCheckedAt is null || now - _workCheckedAt.Value >= TimeSpan.FromSeconds(5))
+        {
+            _workCheckedAt = now;
+            var latest = CodexWork.LastActivity(_codexHome);
+            if (latest is { } at && (_lastWorkAt is null || at > _lastWorkAt))
+            {
+                _lastWorkAt = at;
+            }
+
+            if (_settingsPopup.IsOpen)
+            {
+                FillPanels();
+            }
+        }
+
+        if (CodexWork.ScheduledKeepAlive(_codexHome))
+        {
+            // 自动任务开着 = Codex 会一直被叫醒，等不到「结束」。不关，面板上说清楚。
+            return;
+        }
+
+        var idle = TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes);
+        if (!CodexWork.TimeToShutdown(_lastWorkAt, now, idle))
+        {
+            return;
+        }
+
+        _armed = false;
+        _settings.ShutdownAfterWork = false;
+        SettingsFile.Save(_paths.Settings, _settings, _log);
+        _log.Info($"work idle for {idle.TotalMinutes:0} min (last {_lastWorkAt:u}), shutting down");
+        try
+        {
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo("shutdown", "/s /t 60") { UseShellExecute = false });
+            _notifier?.Show(Strings.ShutdownRow, Strings.ShutdownAboutTo);
+        }
+        catch (Exception error)
+        {
+            _log.Warn($"shutdown not started: {error.Message}");
+        }
     }
 
     private void StartRead(bool pendingIfBusy = true)
@@ -772,6 +829,28 @@ public partial class MainWindow : Window
         SettingsFile.Save(_paths.Settings, _settings, _log);
         return _settings.NotifyOnReset;
     }
+
+    // 工作结束后关机。开着才会去看 Codex 动静；关掉 = 取消，什么都不做。
+    // 这个会话里的开关状态另存一份，因为它是「同意关机」的意图，不该被上次运行留下的设置直接兑现。
+    private bool ToggleShutdownAfterWork()
+    {
+        _settings.ShutdownAfterWork = !_settings.ShutdownAfterWork;
+        _settings.Normalize();
+        SettingsFile.Save(_paths.Settings, _settings, _log);
+        _armed = _settings.ShutdownAfterWork;
+        _log.Info($"shutdown after work {(_settings.ShutdownAfterWork ? "armed" : "off")}");
+        FillPanels();
+        return _settings.ShutdownAfterWork;
+    }
+
+    // 开关下面那一行：还有多久关机，或者现在卡在哪。
+    private string ShutdownStatus() =>
+        CodexWork.Describe(
+            _armed,
+            _lastWorkAt,
+            DateTimeOffset.Now,
+            TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes),
+            CodexWork.ScheduledKeepAlive(_codexHome));
 
     // Same deal, and the overlay follows on the spot instead of waiting for a restart.
     private bool TogglePlate()
