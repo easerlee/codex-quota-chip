@@ -179,6 +179,12 @@ public sealed class ChipPanel : Border
 
         _rows.Children.Add(Divider());
         _rows.Children.Add(CommandRow(Strings.RefreshNow, _refresh));
+        // 工作结束后关机放在一级：它是「现在要不要关机」的决定，不是偏好设置。
+        _rows.Children.Add(SwitchRow(Strings.ShutdownRow, _settings.ShutdownAfterWork, _toggleShutdown));
+        if (_settings.ShutdownAfterWork)
+        {
+            _rows.Children.Add(ShutdownStatusRow());
+        }
         _rows.Children.Add(CommandRow(Strings.SettingsRow, _openSettings));
         _rows.Children.Add(StarRow());
         _rows.Children.Add(Divider());
@@ -246,12 +252,6 @@ public sealed class ChipPanel : Border
         _rows.Children.Add(SwitchRow(Strings.Plate, _settings.Plate, _togglePlate));
         _rows.Children.Add(AutostartRow(_autostart));
         _rows.Children.Add(SwitchRow(Strings.NotifyOnReset, _settings.NotifyOnReset, _toggleNotifications));
-        // 工作结束后关机：开关下面挂一行状态（还有多久 / 卡在哪儿），点它就取消。
-        _rows.Children.Add(SwitchRow(Strings.ShutdownRow, _settings.ShutdownAfterWork, _toggleShutdown));
-        if (_settings.ShutdownAfterWork)
-        {
-            _rows.Children.Add(ShutdownStatusRow());
-        }
         // 语言放在最后一行：改它会把两层面板整个重建，所以不夹在中间。
         _rows.Children.Add(SettingRow(Strings.Language, new Segmented(
             ["中", "EN"], _settings.English ? 1 : 0, index => _setLanguage(index == 0 ? "zh" : "en"))));
