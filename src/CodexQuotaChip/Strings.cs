@@ -63,6 +63,8 @@ public static class Strings
 
     public static string ShutdownRow => T("工作结束后关机", "Shut down after work");
 
+    public static string ShutdownIdle => T("结束等待时长", "Idle before shutdown");
+
     public static string ShutdownOff => T("关", "off");
 
     public static string ShutdownNoActivity => T("还没读到 Codex 动静", "no Codex activity yet");

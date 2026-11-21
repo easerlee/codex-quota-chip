@@ -456,6 +456,12 @@ static void TestShutdownAfterWork()
 
     Equal("2m", Readout.Duration(TimeSpan.FromMinutes(2)), "durations under an hour");
     Equal("3h 12m", Readout.Duration(TimeSpan.FromMinutes(192)), "durations in hours");
+
+    // 结束等待时长只有三档，给的是分钟数；文件里别的值也留一档，保证总有一个选中。
+    Equal("5,10,15", string.Join(",", ChipPanel.IdleChoices(5)), "the default five minutes is one of the choices");
+    Equal("5,10,15", string.Join(",", ChipPanel.IdleChoices(10)), "ten minutes is one of the choices");
+    var extra = ChipPanel.IdleChoices(7);
+    Equal(true, extra.Contains(7) && extra.Count == 4, "a value from the settings file gets a slot of its own");
 }
 
 static void TestExeReResolve()

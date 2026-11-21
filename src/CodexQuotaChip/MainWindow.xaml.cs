@@ -179,8 +179,8 @@ public partial class MainWindow : Window
 
     private void BuildPanel()
     {
-        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ForgetAccount, ToggleShutdownAfterWork, ShutdownStatus, ToggleSettingsLayer, Exit);
-        _settingsPanel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ForgetAccount, ToggleShutdownAfterWork, ShutdownStatus, ToggleSettingsLayer, Exit, settingsOnly: true);
+        _panel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ForgetAccount, ToggleShutdownAfterWork, SetShutdownIdle, ShutdownStatus, ToggleSettingsLayer, Exit);
+        _settingsPanel = new ChipPanel(RefreshFromPanel, ToggleAutostart, ToggleNotifications, TogglePlate, SetRefreshSeconds, SetDisplaySide, SetLanguage, ForgetAccount, ToggleShutdownAfterWork, SetShutdownIdle, ShutdownStatus, ToggleSettingsLayer, Exit, settingsOnly: true);
 
         _popup.PlacementTarget = this;
         _popup.Placement = PlacementMode.Custom;
@@ -851,6 +851,15 @@ public partial class MainWindow : Window
             DateTimeOffset.Now,
             TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes),
             CodexWork.ScheduledKeepAlive(_codexHome));
+
+    // 结束等待时长：改了就立刻按新的阈值算，不用重启。
+    private void SetShutdownIdle(int minutes)
+    {
+        _settings.ShutdownIdleMinutes = minutes;
+        _settings.Normalize();
+        SettingsFile.Save(_paths.Settings, _settings, _log);
+        FillPanels();
+    }
 
     // Same deal, and the overlay follows on the spot instead of waiting for a restart.
     private bool TogglePlate()

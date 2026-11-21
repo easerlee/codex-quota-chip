@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows.Input;
 using System.Windows.Media.Effects;
 using System.Windows.Media.Imaging;
@@ -53,6 +54,7 @@ public sealed class ChipPanel : Border
     private readonly Action<string> _setLanguage;
     private readonly Action<string> _forgetAccount;
     private readonly Func<bool> _toggleShutdown;
+    private readonly Action<int> _setShutdownIdle;
     private readonly Func<string> _shutdownStatus;
     private readonly Action _exit;
 
@@ -66,6 +68,7 @@ public sealed class ChipPanel : Border
         Action<string> setLanguage,
         Action<string> forgetAccount,
         Func<bool> toggleShutdown,
+        Action<int> setShutdownIdle,
         Func<string> shutdownStatus,
         Action openSettings,
         Action exit,
@@ -73,6 +76,7 @@ public sealed class ChipPanel : Border
     {
         _forgetAccount = forgetAccount;
         _toggleShutdown = toggleShutdown;
+        _setShutdownIdle = setShutdownIdle;
         _shutdownStatus = shutdownStatus;
         _settingsOnly = settingsOnly;
         _refresh = refresh;
@@ -246,6 +250,8 @@ public sealed class ChipPanel : Border
     {
         _rows.Children.Clear();
         _rows.Children.Add(SettingRow(Strings.RefreshInterval, IntervalPicker(_settings.RefreshSeconds)));
+        // 工作结束后关机的「安静多久算干完」：和刷新间隔同一个三档开关，默认 5 分钟。
+        _rows.Children.Add(SettingRow(Strings.ShutdownIdle, IdlePicker(_settings.ShutdownIdleMinutes)));
         _rows.Children.Add(SettingRow(Strings.DisplaySide, new Segmented(
             [Strings.SideLeft, Strings.SideRight], _settings.DisplayLeft ? 0 : 1, index => _setDisplaySide(index == 0 ? "left" : "right"))));
         // The plate the overlay draws under itself: same idea as this panel's own background.
@@ -291,6 +297,26 @@ public sealed class ChipPanel : Border
         }
 
         return offered;
+    }
+
+    // 结束等待时长：5 / 10 / 15 分钟，从分钟数直接成档。文件里的值不在其中时加进来，保证总有一个选中。
+    public static List<int> IdleChoices(int currentMinutes)
+    {
+        var offered = new List<int> { 5, 10, 15 };
+        if (currentMinutes > 0 && !offered.Contains(currentMinutes))
+        {
+            offered.Add(currentMinutes);
+            offered.Sort();
+        }
+
+        return offered;
+    }
+
+    private Segmented IdlePicker(int currentMinutes)
+    {
+        var offered = IdleChoices(currentMinutes);
+        return new Segmented(offered.Select(minutes => minutes.ToString(CultureInfo.InvariantCulture)).ToList(),
+            offered.IndexOf(currentMinutes), index => _setShutdownIdle(offered[index]));
     }
 
     // Sits right after the name of the account that is logged in now, so the rows under it read as
