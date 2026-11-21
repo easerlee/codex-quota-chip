@@ -81,6 +81,15 @@ public partial class MainWindow : Window
         _client = new QuotaClient(codexHome, log, codexExe.Resolve);
         _accounts = new AccountFile(paths.Accounts);
 
+        // 上次运行留下的「开着」不算数：这是会关掉整台机器的开关，每次启动都要亲手打开。
+        // 而且面板上那个开关读的就是这个字段 —— 不清掉的话，重启后开关显示「开」，实际上没人盯着，
+        // 用户会以为它还在数。
+        if (settings.ShutdownAfterWork)
+        {
+            settings.ShutdownAfterWork = false;
+            SettingsFile.Save(paths.Settings, settings, log);
+        }
+
         // 语言在建界面之前定下来：下面每一处文字都是从这里取的。
         Strings.Use(settings.Language);
 
