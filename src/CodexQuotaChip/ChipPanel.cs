@@ -265,19 +265,12 @@ public sealed class ChipPanel : Border
 
     private UIElement ShutdownStatusRow()
     {
-        var status = _shutdownStatus();
-        var text = Caption(status, Theme.Panel.Dim, 10.5);
-        // 这行会带上判定证据（open=1 newest=70s tag=write），长度随秒数变。不夹住的话面板宽度会跟着
-        // 抖；夹住并给完整文字留个悬停提示，就不会因为怕抖而不敢写证据。
-        text.MaxWidth = LabelWidth + BarWidth + MinValueWidth + MinResetWidth;
-        text.TextTrimming = TextTrimming.CharacterEllipsis;
-        text.ToolTip = status;
         var row = new Border
         {
             Padding = new Thickness(RowInset + 2, 0, RowInset, 4),
             Background = Brushes.Transparent,
             Cursor = Cursors.Hand,
-            Child = text
+            Child = Caption(_shutdownStatus(), Theme.Panel.Dim, 10.5)
         };
         // 点一下 = 取消。取消就是把开关关掉，下一拍就不再看它了。
         row.MouseLeftButtonUp += (_, _) => _toggleShutdown();

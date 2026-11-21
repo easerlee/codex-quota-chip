@@ -67,18 +67,15 @@ public static class Strings
 
     public static string ShutdownOff => T("关", "off");
 
-    public static string ShutdownNoActivity => T("还没读到 Codex 动静", "no Codex activity yet");
+    // 状态行只有四句话：在查看、在工作、还有多久、正在关。
+    public static string ShutdownChecking => T("正在查看 Codex 状态", "checking Codex status");
 
-    // 在干活时把证据一起显示：open=1 说明有一个回合还开着，tag 说明是哪条规则判的忙。
-    public static string ShutdownBusy => T("Codex 在干活", "Codex is working");
+    public static string ShutdownBusy => T("Codex 正在工作", "Codex is working");
 
-    public static string ShutdownIn(string left) =>
-        English ? $"{left} — click to cancel" : $"{left} 后关机 — 点这里取消";
+    public static string ShutdownIn(int minutes) =>
+        English ? $"shutting down in {minutes} min" : $"{minutes} 分钟后关机";
 
-    public static string ShutdownAboutTo => T("现在关机 — 点这里取消", "shutting down now — click to cancel");
-
-    public static string ShutdownConfirmed =>
-        T("已收到，Codex 一停就关机", "ok — shutting down when Codex stops");
+    public static string ShutdownAboutTo => T("正在执行关机", "shutting down now");
 
     // ---------------------------------------------------------------- 重置券 / 通知
 

@@ -481,6 +481,9 @@ public static class CodexWork
     public static bool TimeToShutdown(DateTimeOffset? lastActivity, DateTimeOffset now, TimeSpan idle) =>
         lastActivity is { } at && now - at >= idle;
 
+    // 状态行只说四件事：在查看、在工作、还有多久、正在关。
+    // 判定证据（open=… tag=…）不塞进这一行 —— 那串东西会让文案随秒数变长变短，
+    // 要核对判定用 --work-check。
     public static string Describe(bool enabled, WorkReading? reading, DateTimeOffset now, TimeSpan idle)
     {
         if (!enabled)
@@ -490,20 +493,26 @@ public static class CodexWork
 
         if (reading is null)
         {
-            return Strings.ShutdownNoActivity;
+            return Strings.ShutdownChecking;
         }
 
         if (reading.Busy)
         {
-            return $"{Strings.ShutdownBusy} · {reading.Evidence}";
+            return Strings.ShutdownBusy;
         }
 
         if (reading.LastActivity is not { } at)
         {
-            return Strings.ShutdownNoActivity;
+            return Strings.ShutdownChecking;
         }
 
         var left = (at + idle) - now;
-        return left <= TimeSpan.Zero ? Strings.ShutdownAboutTo : Strings.ShutdownIn(Readout.Duration(left));
+        if (left <= TimeSpan.Zero)
+        {
+            return Strings.ShutdownAboutTo;
+        }
+
+        // 分钟向上取整：还剩 30 秒就显示「1 分钟后关机」，不出现「0 分钟后」。
+        return Strings.ShutdownIn(Math.Max(1, (int)Math.Ceiling(left.TotalMinutes)));
     }
 }

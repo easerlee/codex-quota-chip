@@ -446,15 +446,20 @@ static void TestShutdownAfterWork()
     Strings.Use("zh");
     Equal(CodexWork.Describe(false, null, now, idle) == Strings.ShutdownOff, true,
         "switched off reads off, even when the machine has been quiet for hours");
-    Equal(CodexWork.Describe(true, null, now, idle) == Strings.ShutdownNoActivity, true,
-        "switched on without a reading says so");
+    Equal(CodexWork.Describe(true, null, now, idle) == Strings.ShutdownChecking, true,
+        "switched on without a reading yet reads as still looking");
 
     var quiet = new CodexWork.WorkReading(false, "idle", "open=0 newest=180s tag=idle", now.AddMinutes(-3));
-    Equal(CodexWork.Describe(true, quiet, now, idle), Strings.ShutdownIn("2m"),
+    Equal(CodexWork.Describe(true, quiet, now, idle), Strings.ShutdownIn(2),
         "three quiet minutes against a five minute threshold leaves two");
 
+    // 还剩 30 秒：显示「1 分钟后」，不出现「0 分钟后」。
+    var half = new CodexWork.WorkReading(false, "idle", "open=0 newest=270s tag=idle", now.AddSeconds(-270));
+    Equal(CodexWork.Describe(true, half, now, idle), Strings.ShutdownIn(1),
+        "under a minute left still reads as one minute");
+
     var busy = new CodexWork.WorkReading(true, "open", "open=1 newest=6s tag=open", now);
-    Equal(true, CodexWork.Describe(true, busy, now, idle).StartsWith(Strings.ShutdownBusy, StringComparison.Ordinal),
+    Equal(CodexWork.Describe(true, busy, now, idle) == Strings.ShutdownBusy, true,
         "a working Codex is named as such, not counted down");
 
     var nearly = new CodexWork.WorkReading(false, "idle", "open=0 newest=540s tag=idle", now.AddMinutes(-9));
