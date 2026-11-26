@@ -180,7 +180,7 @@ public partial class App : Application
             var age = (now.UtcDateTime - file.LastWriteTimeUtc).TotalSeconds;
             var (busy, tag) = CodexWork.Classify(state, age);
             Console.WriteLine(
-                $"  {(busy ? "BUSY" : "    ")} {tag,-10} age={age,8:0}s open={(state.Open ? 1 : 0)} write={(state.Write ? 1 : 0)} hb={(state.Heartbeat ? 1 : 0)} quota={(state.Quota ? 1 : 0)} {file.Name}");
+                $"  {(busy ? "BUSY" : "    ")} {tag,-12} age={age,8:0}s open={(state.Open ? 1 : 0)} write={(state.Write ? 1 : 0)} hb={(state.Heartbeat ? 1 : 0)} quota={(state.Quota ? 1 : 0)} run={(state.Pending ? 1 : 0)} {file.Name}");
         }
     }
 

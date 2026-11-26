@@ -33,6 +33,10 @@ public static class CodexWork
     // 回合开着但文件静默这么久：进程已挂或回合被丢弃，不再阻塞关机。
     private const double HangSeconds = 1200;
 
+    // 有一条工具调用还没返回结果的，最多认这么久。跑一次构建/测试可能几十分钟，所以给两小时；
+    // 超过两小时还没结果，基本是那个回合被杀了，不能一直拦着关机。
+    private const double PendingHangSeconds = 7200;
+
     // 写操作的痕迹。命中任意一个就算「在改东西」，而不是在纯聊天。
     private static readonly string[] WriteTokens =
     [
@@ -52,7 +56,8 @@ public static class CodexWork
         bool Write,
         bool Quota,
         bool LastComplete,
-        bool SawTurn)
+        bool SawTurn,
+        bool Pending = false)
     {
         public static readonly FileState Empty = new(false, false, false, false, false, false);
     }
@@ -135,31 +140,38 @@ public static class CodexWork
             return (false, "quota");
         }
 
-        // 2. 回合开着但久到不像还在跑：挂死的残局。
+        // 2. 有一条命令还没返回：正在跑构建、测试、长脚本。文件不落盘也照样是干活，
+        //    这条要排在 stale-open 前面 —— 跑 40 分钟构建的回合，看起来跟挂死的回合一模一样。
+        if (state.Pending && ageSeconds < PendingHangSeconds)
+        {
+            return (true, "running-tool");
+        }
+
+        // 3. 回合开着但久到不像还在跑：挂死的残局。
         if (staleOpen)
         {
             return (false, "stale-open");
         }
 
-        // 3. 心跳线程确实在写东西 —— 定时任务也会改代码，得算忙。
+        // 4. 心跳线程确实在写东西 —— 定时任务也会改代码，得算忙。
         if (constructing)
         {
             return (true, "hb-work");
         }
 
-        // 4. 心跳线程只是醒来扫一眼，不算。
+        // 5. 心跳线程只是醒来扫一眼，不算。
         if (state.Heartbeat && !state.Write)
         {
             return (false, "hb-poll");
         }
 
-        // 5. 回合开着、文件还在动：在飞思考。
+        // 6. 回合开着、文件还在动：在飞思考。
         if (inFlight)
         {
             return (true, "open");
         }
 
-        // 6. 三分钟内写过文件，且命中写操作：在写代码。
+        // 7. 三分钟内写过文件，且命中写操作：在写代码。
         if (ageSeconds < BusyWindowSeconds && state.Write)
         {
             return (true, "write");
@@ -200,6 +212,8 @@ public static class CodexWork
     public static FileState Scan(string text)
     {
         var open = new HashSet<string>(StringComparer.Ordinal);
+        // 已经发出、还没拿到结果的工具调用。跑构建/测试的时候就是这个状态：命令在跑，文件不落盘。
+        var pendingCalls = new HashSet<string>(StringComparer.Ordinal);
         var heartbeat = false;
         var write = false;
         var quota = false;
@@ -259,9 +273,29 @@ public static class CodexWork
                     open.Remove("?");
                 }
             }
+
+            // 先认结果行：custom_tool_call_output 里也含 custom_tool_call，顺序反了会把它当成调用。
+            if (line.Contains("\"custom_tool_call_output\"", StringComparison.Ordinal)
+                || line.Contains("\"function_call_output\"", StringComparison.Ordinal))
+            {
+                var done = Value(line, "call_id");
+                if (done.Length > 0)
+                {
+                    pendingCalls.Remove(done);
+                }
+            }
+            else if (line.Contains("\"custom_tool_call\"", StringComparison.Ordinal)
+                     || line.Contains("\"function_call\"", StringComparison.Ordinal))
+            {
+                var call = Value(line, "call_id");
+                if (call.Length > 0)
+                {
+                    pendingCalls.Add(call);
+                }
+            }
         }
 
-        return new FileState(open.Count > 0, heartbeat, write, quota, lastComplete, sawTurn);
+        return new FileState(open.Count > 0, heartbeat, write, quota, lastComplete, sawTurn, pendingCalls.Count > 0);
     }
 
     // 一行 JSON 里的 turn 事件：event_msg + payload.type=task_started / task_complete。

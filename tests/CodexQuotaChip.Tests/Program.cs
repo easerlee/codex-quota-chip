@@ -504,6 +504,8 @@ static void TestCodexWorkProbe()
     const string Patch = """{"type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch"}}""";
     const string QuotaLine = """{"type":"event_msg","payload":{"type":"task_complete","turn_id":"a","message":"usage limit reached"}}""";
     const string BeatLine = """{"type":"event_msg","payload":{"type":"task_started","message":"<heartbeat>"}}""";
+    const string Call = """{"type":"response_item","payload":{"type":"custom_tool_call","name":"exec","call_id":"call_1","input":{"cmd":"npm run build"}}}""";
+    const string Output = """{"type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"call_1","output":"ok"}}""";
 
     // 1) 回合开着，文件 30 秒前写过 → 忙。
     var open = CodexWork.Scan(string.Join("\n", StartedA));
@@ -538,6 +540,20 @@ static void TestCodexWorkProbe()
 
     // 7) 回合开着但文件 25 分钟未动 → 闲（挂死的残局）。
     Equal((false, "stale-open"), CodexWork.Classify(open, 1500), "an open turn that stopped moving is stale");
+
+    // 7b) 但如果是命令还没返回，跑多久都算忙 —— 构建 40 分钟和挂死，文件状态一模一样。
+    var running = CodexWork.Scan(string.Join("\n", StartedA, Call, "\n"));
+    Equal(true, running.Pending, "a tool call without its output is still running");
+    Equal((true, "running-tool"), CodexWork.Classify(running, 2400),
+        "a forty minute build still counts as work, not as a hung turn");
+    var answered = CodexWork.Scan(string.Join("\n", StartedA, Call, Output));
+    Equal(false, answered.Pending, "the matching output clears it");
+    Equal((false, "idle"), CodexWork.Classify(answered with { Open = false }, 300),
+        "once the command returns and the turn closes, five quiet minutes is idle again");
+    var lostOutput = CodexWork.Scan(string.Join("\n", StartedA, Call));
+    Equal((false, "stale-open"), CodexWork.Classify(lostOutput, 7300),
+        "a call whose output never came two hours later is not work any more");
+    Equal(false, CodexWork.Scan(Output).Pending, "an output on its own never counts as a running call");
 
     // 8) 额度报错结束的回合 → 闲。
     var quota = CodexWork.Scan(string.Join("\n", StartedA, QuotaLine));
