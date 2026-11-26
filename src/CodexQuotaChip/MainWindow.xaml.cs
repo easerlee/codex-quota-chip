@@ -68,7 +68,7 @@ public partial class MainWindow : Window
 
     // 「工作结束后关机」。armed 只在这次运行里由用户亲手打开，设置文件里留着上次的值也不自动兑现。
     private bool _armed;
-    private DateTimeOffset? _lastWorkAt;
+    private DateTimeOffset? _idleSince;
     private DateTimeOffset? _workCheckedAt;
     private CodexWork.WorkReading? _work;
 
@@ -528,15 +528,10 @@ public partial class MainWindow : Window
             _workCheckedAt = now;
             _work = CodexWork.Inspect(_codexHome, now);
 
-            // 任何一个探针报忙，倒计时起点立刻重置 —— 不是扣减也不是累计。
-            if (_work.Busy)
-            {
-                _lastWorkAt = now;
-            }
-            else if (_lastWorkAt is null && _work.LastActivity is { } at)
-            {
-                _lastWorkAt = at;
-            }
+            // 起点只认「我们自己观察到的安静」：忙就清零，闲就在第一次看到时记下。
+            // 不能再用 reading.LastActivity 当起点 —— 那会把打开开关之前已经过去的安静算进来，
+            // 于是开关一开就立刻满足阈值（0.2.47 就是这么误关机的）。
+            _idleSince = CodexWork.Track(_idleSince, _work.Busy, now);
 
             if (_settingsPopup.IsOpen)
             {
@@ -549,7 +544,7 @@ public partial class MainWindow : Window
         }
 
         var idle = TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes);
-        if (_work is null || _work.Busy || !CodexWork.TimeToShutdown(_lastWorkAt, now, idle))
+        if (_work is null || _work.Busy || !CodexWork.Elapsed(_idleSince, now, idle))
         {
             return;
         }
@@ -562,11 +557,11 @@ public partial class MainWindow : Window
         if (_shutdownDryRun)
         {
             // 只留证据，不动这台机器。验证「该关的时候真会关、关掉之后真不关」全靠它。
-            _log.Info($"would shut down: work idle for {idle.TotalMinutes:0} min (last {_lastWorkAt:u}) [dry run]");
+            _log.Info($"would shut down: work idle for {idle.TotalMinutes:0} min (since {_idleSince:u}) [dry run]");
             return;
         }
 
-        _log.Info($"work idle for {idle.TotalMinutes:0} min (last {_lastWorkAt:u}), shutting down");
+        _log.Info($"work idle for {idle.TotalMinutes:0} min (since {_idleSince:u}), shutting down");
         try
         {
             System.Diagnostics.Process.Start(
@@ -889,9 +884,14 @@ public partial class MainWindow : Window
         _settings.Normalize();
         SettingsFile.Save(_paths.Settings, _settings, _log);
         _armed = _settings.ShutdownAfterWork;
+        // 每次打开都从零开始数：上一次的安静、上一次启动留下的判定，都不算数。
+        // 关掉时同样清掉，免得下次打开继承一个已经过期的起点。
+        _idleSince = null;
+        _workCheckedAt = null;
         // 开着才有那句状态，点也只在开着时走；关掉就把定时器停了，别让它在后台空转。
         if (_armed)
         {
+            _work = CodexWork.Inspect(_codexHome, DateTimeOffset.Now);
             _shutdownBase = ShutdownBase();
             _dotsTimer.Start();
         }
@@ -915,6 +915,7 @@ public partial class MainWindow : Window
         CodexWork.Describe(
             _armed,
             _work,
+            _idleSince,
             DateTimeOffset.Now,
             TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes));
 

@@ -437,34 +437,52 @@ static void TestShutdownAfterWork()
     var now = DateTimeOffset.Parse("2026-11-22T02:00:00+08:00");
     var idle = TimeSpan.FromMinutes(5);
 
-    // 刚有动静：不关。
+    // 0.2.47 的误关机：07:30:04 打开开关，而最后一次写入是 07:27:38，
+    // 老逻辑拿 07:27:38 当起点，两分半就把机器关了。现在起点只能是「打开之后亲眼看到的安静」。
+    var armed = DateTimeOffset.Parse("2026-11-22T02:00:04+08:00");
+    var idleSinceAtArm = CodexWork.Track(null, busy: false, armed);
+    Equal(armed, idleSinceAtArm, "the clock starts when the switch is flipped, not at the last write from before");
+    Equal(false, CodexWork.Elapsed(idleSinceAtArm, armed.AddMinutes(2).AddSeconds(34), idle),
+        "two and a half minutes after arming is not five quiet minutes, however old the last write was");
+    Equal(true, CodexWork.Elapsed(idleSinceAtArm, armed.AddMinutes(5), idle),
+        "five observed quiet minutes after arming does count");
+
+    // 忙一拍就把起点清零，之后再闲要重新数满。
+    Equal(null, CodexWork.Track(idleSinceAtArm, busy: true, armed.AddMinutes(3)),
+        "one busy tick throws the countdown away");
+    var restarted = CodexWork.Track(null, busy: false, armed.AddMinutes(3));
+    Equal(false, CodexWork.Elapsed(restarted, armed.AddMinutes(7), idle),
+        "after the busy tick, seven minutes in total is still only four quiet ones");
+
+    // 闲的时候起点不动，不会被每五秒一次的探测无限推后。
+    Equal(idleSinceAtArm, CodexWork.Track(idleSinceAtArm, busy: false, armed.AddMinutes(1)),
+        "idle ticks keep the original start instead of sliding it forward");
+
     Equal(false, CodexWork.TimeToShutdown(now.AddMinutes(-1), now, idle), "work one minute ago is not finished");
-    // 静默够久：关机。
     Equal(true, CodexWork.TimeToShutdown(now.AddMinutes(-6), now, idle), "six quiet minutes with a five minute threshold is done");
-    // 一次都没看到动静：不关 —— 判断不了它干完没有。
     Equal(false, CodexWork.TimeToShutdown(null, now, idle), "no activity seen at all never shuts down");
 
     Strings.Use("zh");
-    Equal(CodexWork.Describe(false, null, now, idle) == Strings.ShutdownOff, true,
+    Equal(CodexWork.Describe(false, null, null, now, idle) == Strings.ShutdownOff, true,
         "switched off reads off, even when the machine has been quiet for hours");
-    Equal(CodexWork.Describe(true, null, now, idle) == Strings.ShutdownChecking, true,
+    Equal(CodexWork.Describe(true, null, null, now, idle) == Strings.ShutdownChecking, true,
         "switched on without a reading yet reads as still looking");
+    Equal(CodexWork.Describe(true, new CodexWork.WorkReading(false, "idle", "", now), null, now, idle) == Strings.ShutdownChecking, true,
+        "idle but no observed quiet yet still reads as still looking");
 
     var quiet = new CodexWork.WorkReading(false, "idle", "open=0 newest=180s tag=idle", now.AddMinutes(-3));
-    Equal(CodexWork.Describe(true, quiet, now, idle), Strings.ShutdownIn(2),
+    Equal(CodexWork.Describe(true, quiet, now.AddMinutes(-3), now, idle), Strings.ShutdownIn(2),
         "three quiet minutes against a five minute threshold leaves two");
 
     // 还剩 30 秒：显示「1 分钟后」，不出现「0 分钟后」。
-    var half = new CodexWork.WorkReading(false, "idle", "open=0 newest=270s tag=idle", now.AddSeconds(-270));
-    Equal(CodexWork.Describe(true, half, now, idle), Strings.ShutdownIn(1),
+    Equal(CodexWork.Describe(true, quiet, now.AddSeconds(-270), now, idle), Strings.ShutdownIn(1),
         "under a minute left still reads as one minute");
 
     var busy = new CodexWork.WorkReading(true, "open", "open=1 newest=6s tag=open", now);
-    Equal(CodexWork.Describe(true, busy, now, idle) == Strings.ShutdownBusy, true,
+    Equal(CodexWork.Describe(true, busy, now.AddMinutes(-4), now, idle) == Strings.ShutdownBusy, true,
         "a working Codex is named as such, not counted down");
 
-    var nearly = new CodexWork.WorkReading(false, "idle", "open=0 newest=540s tag=idle", now.AddMinutes(-9));
-    Equal(CodexWork.Describe(true, nearly, now, idle) == Strings.ShutdownAboutTo, true,
+    Equal(CodexWork.Describe(true, quiet, now.AddMinutes(-9), now, idle) == Strings.ShutdownAboutTo, true,
         "long past the threshold reads as now");
 
     Equal("2m", Readout.Duration(TimeSpan.FromMinutes(2)), "durations under an hour");

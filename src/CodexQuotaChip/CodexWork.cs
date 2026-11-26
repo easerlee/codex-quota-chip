@@ -481,10 +481,27 @@ public static class CodexWork
     public static bool TimeToShutdown(DateTimeOffset? lastActivity, DateTimeOffset now, TimeSpan idle) =>
         lastActivity is { } at && now - at >= idle;
 
+    // 空闲计时的维护，两个纯函数，方便测：
+    //   忙 → 起点清零（这一次发现的忙，不能让之前的安静继续算数）；
+    //   闲 → 只在第一次亲眼看到闲时记下起点。
+    // 起点只能来自「我们自己观察到的安静」，不能拿历史里已经过去的安静时间充数 ——
+    // 打开开关那一刻，文件可能已经 5 分钟没动了，那不代表接下来 5 分钟它也闲着。
+    // 这就是 0.2.47 误关机的根因：开关一开，倒计时直接从几分钟前算起，两分钟就动手了。
+    public static DateTimeOffset? Track(DateTimeOffset? idleSince, bool busy, DateTimeOffset now) =>
+        busy ? null : idleSince ?? now;
+
+    public static bool Elapsed(DateTimeOffset? idleSince, DateTimeOffset now, TimeSpan idle) =>
+        idleSince is { } since && now - since >= idle;
+
     // 状态行只说四件事：在查看、在工作、还有多久、正在关。
     // 判定证据（open=… tag=…）不塞进这一行 —— 那串东西会让文案随秒数变长变短，
     // 要核对判定用 --work-check。
-    public static string Describe(bool enabled, WorkReading? reading, DateTimeOffset now, TimeSpan idle)
+    public static string Describe(
+        bool enabled,
+        WorkReading? reading,
+        DateTimeOffset? idleSince,
+        DateTimeOffset now,
+        TimeSpan idle)
     {
         if (!enabled)
         {
@@ -501,12 +518,12 @@ public static class CodexWork
             return Strings.ShutdownBusy;
         }
 
-        if (reading.LastActivity is not { } at)
+        if (idleSince is not { } since)
         {
             return Strings.ShutdownChecking;
         }
 
-        var left = (at + idle) - now;
+        var left = (since + idle) - now;
         if (left <= TimeSpan.Zero)
         {
             return Strings.ShutdownAboutTo;
