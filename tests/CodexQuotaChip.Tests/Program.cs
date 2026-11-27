@@ -35,7 +35,8 @@ var tests = new (string Name, Action Body)[]
     ("a second monitor's window does not park the chip", TestDualMonitor),
     ("work idle enough arms the shutdown", TestShutdownAfterWork),
     ("the probe reads turns, not mtimes", TestCodexWorkProbe),
-    ("the waiting dots cycle one to three", TestDots)
+    ("the waiting dots cycle one to three", TestDots),
+    ("the shutdown waits for codex and for me", TestShutdownGate)
 };
 
 var passed = 0;
@@ -590,6 +591,38 @@ static string Repeat(string line, int times)
 }
 
 // 状态行后面那三个点：1 → 2 → 3 → 1，不多不少。
+// 关机要三个条件同时成立：Codex 不忙、人不忙、安静够久。少一个都不能动手。
+// 「人不忙」是 2026-11-27 那次误关机的补丁 —— Codex 闲了，但人还在别的工具里写东西。
+static void TestShutdownGate()
+{
+    var now = DateTimeOffset.Parse("2026-11-27T08:00:00+08:00");
+    var idle = TimeSpan.FromMinutes(5);
+    var longAgo = now.AddMinutes(-30);
+
+    // 人到电脑前：一律不关，倒计时连起点都不记。
+    var active = CodexWork.Decide(codexBusy: false, userActive: true, idleSince: longAgo, now, idle);
+    Equal(false, active.Fire, "typing on the machine keeps the shutdown away");
+    Equal(null, active.IdleSince, "and the countdown starts over");
+
+    // Codex 在干活：同理。
+    var busy = CodexWork.Decide(codexBusy: true, userActive: false, idleSince: longAgo, now, idle);
+    Equal(false, busy.Fire, "codex still working keeps it away");
+    Equal(null, busy.IdleSince, "and that countdown starts over too");
+
+    // 两个都闲，但刚闲下来：记下起点，还不关。
+    var fresh = CodexWork.Decide(false, false, null, now, idle);
+    Equal(false, fresh.Fire, "just went quiet is not five minutes quiet");
+    Equal(now, fresh.IdleSince, "the countdown starts when we first saw it quiet");
+
+    // 两个都闲够久：关。
+    var done = CodexWork.Decide(false, false, now.AddMinutes(-6), now, idle);
+    Equal(true, done.Fire, "six quiet minutes from both sides fires");
+
+    // 差一分钟：不关。
+    var nearly = CodexWork.Decide(false, false, now.AddMinutes(-4), now, idle);
+    Equal(false, nearly.Fire, "four quiet minutes is not yet five");
+}
+
 static void TestDots()
 {
     Equal(2, Dots.Next(1), "one dot goes to two");

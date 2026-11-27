@@ -69,6 +69,12 @@ public partial class MainWindow : Window
     // 「工作结束后关机」。armed 只在这次运行里由用户亲手打开，设置文件里留着上次的值也不自动兑现。
     private bool _armed;
     private DateTimeOffset? _idleSince;
+
+    // 键盘鼠标还在动：这是硬闸，它一为真就一定不关机。
+    private bool _userActive;
+
+    // 上一拍算出来「该关了」。只在这里为真时才执行，别的条件都不重复判断。
+    private bool _fireNow;
     private DateTimeOffset? _workCheckedAt;
     private CodexWork.WorkReading? _work;
 
@@ -523,15 +529,24 @@ public partial class MainWindow : Window
             return;
         }
 
+        var idle = TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes);
+
         if (_workCheckedAt is null || now - _workCheckedAt.Value >= TimeSpan.FromSeconds(5))
         {
             _workCheckedAt = now;
             _work = CodexWork.Inspect(_codexHome, now);
 
+            // 人在动电脑也算「没干完」：只看 Codex 会话的话，用户在别的工具里写东西、Codex 恰好闲着，
+            // 就会被判成干完了（2026-11-27 07:32 真关过一次机，就是这样）。键盘或鼠标一动，
+            // 倒计时就从头再数。
+            _userActive = Input.Idle() < idle;
+
             // 起点只认「我们自己观察到的安静」：忙就清零，闲就在第一次看到时记下。
             // 不能再用 reading.LastActivity 当起点 —— 那会把打开开关之前已经过去的安静算进来，
             // 于是开关一开就立刻满足阈值（0.2.47 就是这么误关机的）。
-            _idleSince = CodexWork.Track(_idleSince, _work.Busy, now);
+            var decision = CodexWork.Decide(_work.Busy, _userActive, _idleSince, now, idle);
+            _idleSince = decision.IdleSince;
+            _fireNow = decision.Fire;
 
             if (_settingsPopup.IsOpen)
             {
@@ -543,8 +558,7 @@ public partial class MainWindow : Window
             _panel?.RefreshShutdownStatus(ShutdownStatus());
         }
 
-        var idle = TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes);
-        if (_work is null || _work.Busy || !CodexWork.Elapsed(_idleSince, now, idle))
+        if (_work is null || !_fireNow)
         {
             return;
         }

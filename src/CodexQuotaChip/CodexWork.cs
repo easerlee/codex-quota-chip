@@ -527,6 +527,21 @@ public static class CodexWork
     public static bool Elapsed(DateTimeOffset? idleSince, DateTimeOffset now, TimeSpan idle) =>
         idleSince is { } since && now - since >= idle;
 
+    // 一次判定的全部内容：新的起点 + 该不该关。
+    // 三个条件必须同时成立才动手：Codex 不忙、人不忙、安静够久。少一个都不行 ——
+    // 「人不忙」就是键盘鼠标也停了，它挡住的是「Codex 闲了但我还在写东西」这一种。
+    public static (DateTimeOffset? IdleSince, bool Fire) Decide(
+        bool codexBusy,
+        bool userActive,
+        DateTimeOffset? idleSince,
+        DateTimeOffset now,
+        TimeSpan idle)
+    {
+        var since = Track(idleSince, codexBusy || userActive, now);
+        var fire = !codexBusy && !userActive && Elapsed(since, now, idle);
+        return (since, fire);
+    }
+
     // 状态行只说四件事：在查看、在工作、还有多久、正在关。
     // 判定证据（open=… tag=…）不塞进这一行 —— 那串东西会让文案随秒数变长变短，
     // 要核对判定用 --work-check。
