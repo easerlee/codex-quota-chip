@@ -528,26 +528,38 @@ public static class CodexWork
         idleSince is { } since && now - since >= idle;
 
     // 一次判定的全部内容：新的起点 + 该不该关。
-    // 三个条件必须同时成立才动手：Codex 不忙、人不忙、安静够久。少一个都不行 ——
-    // 「人不忙」就是键盘鼠标也停了，它挡住的是「Codex 闲了但我还在写东西」这一种。
+    //
+    // 四个条件同时成立才动手，少一个都不行：
+    //   * 这次开启之后，**亲眼见过 Codex 在干活**（sawWork）。没有这一条，睡前打开开关、
+    //     队列还没开始跑，五分钟后就关机 —— 醒来发现活根本没干。
+    //   * Codex 现在不忙。
+    //   * 人也没在动（userActive 为假）。挡住「Codex 闲了但我还在写东西」。
+    //   * 两边都安静够久。
     public static (DateTimeOffset? IdleSince, bool Fire) Decide(
         bool codexBusy,
         bool userActive,
+        bool sawWork,
         DateTimeOffset? idleSince,
         DateTimeOffset now,
         TimeSpan idle)
     {
+        if (!sawWork)
+        {
+            // 还没见过它干活：什么都不算，连起点也不记。
+            return (null, false);
+        }
+
         var since = Track(idleSince, codexBusy || userActive, now);
         var fire = !codexBusy && !userActive && Elapsed(since, now, idle);
         return (since, fire);
     }
 
-    // 状态行只说四件事：在查看、在工作、还有多久、正在关。
-    // 判定证据（open=… tag=…）不塞进这一行 —— 那串东西会让文案随秒数变长变短，
-    // 要核对判定用 --work-check。
+    // 状态行：开启后还没见过 Codex 干活时，如实说「等它开工」，而不是假装在倒计时。
+    // 判定证据（open=… tag=…）不塞进这一行 —— 那串东西会让文案随秒数变长变短，核对用 --work-check。
     public static string Describe(
         bool enabled,
         WorkReading? reading,
+        bool sawWork,
         DateTimeOffset? idleSince,
         DateTimeOffset now,
         TimeSpan idle)
@@ -565,6 +577,12 @@ public static class CodexWork
         if (reading.Busy)
         {
             return Strings.ShutdownBusy;
+        }
+
+        // 这次开启之后它一次都没干过活：不进入倒计时，明说在等。
+        if (!sawWork)
+        {
+            return Strings.ShutdownWaitingWork;
         }
 
         if (idleSince is not { } since)

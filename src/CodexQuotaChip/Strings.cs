@@ -72,6 +72,10 @@ public static class Strings
 
     public static string ShutdownBusy => T("Codex 正在工作", "Codex is working");
 
+    // 开着开关但这次还没见它干过活：不进倒计时。睡前开着、队列还没跑起来时就是这句。
+    public static string ShutdownWaitingWork =>
+        T("等 Codex 开工后才开始计时", "waits until Codex has actually worked");
+
     public static string ShutdownIn(int minutes) =>
         English ? $"shutting down in {minutes} min" : $"{minutes} 分钟后关机";
 

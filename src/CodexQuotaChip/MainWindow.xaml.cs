@@ -75,6 +75,10 @@ public partial class MainWindow : Window
 
     // 上一拍算出来「该关了」。只在这里为真时才执行，别的条件都不重复判断。
     private bool _fireNow;
+
+    // 这次开启之后有没有亲眼见过 Codex 干活。没有就不许倒计时 —— 睡前打开开关、队列还没跑起来，
+    // 不能被当成「干完了」而关机。
+    private bool _sawWork;
     private DateTimeOffset? _workCheckedAt;
     private CodexWork.WorkReading? _work;
 
@@ -540,11 +544,12 @@ public partial class MainWindow : Window
             // 就会被判成干完了（2026-11-27 07:32 真关过一次机，就是这样）。键盘或鼠标一动，
             // 倒计时就从头再数。
             _userActive = Input.Idle() < idle;
+            _sawWork |= _work.Busy;
 
             // 起点只认「我们自己观察到的安静」：忙就清零，闲就在第一次看到时记下。
             // 不能再用 reading.LastActivity 当起点 —— 那会把打开开关之前已经过去的安静算进来，
             // 于是开关一开就立刻满足阈值（0.2.47 就是这么误关机的）。
-            var decision = CodexWork.Decide(_work.Busy, _userActive, _idleSince, now, idle);
+            var decision = CodexWork.Decide(_work.Busy, _userActive, _sawWork, _idleSince, now, idle);
             _idleSince = decision.IdleSince;
             _fireNow = decision.Fire;
 
@@ -902,6 +907,9 @@ public partial class MainWindow : Window
         // 关掉时同样清掉，免得下次打开继承一个已经过期的起点。
         _idleSince = null;
         _workCheckedAt = null;
+        // 「见过它干活」也只认这一次开启之后的。睡前打开开关、队列还没跑起来时，这一条为假，
+        // 于是永远不进入倒计时 —— 不会被当成「干完了」而关机。
+        _sawWork = false;
         // 开着才有那句状态，点也只在开着时走；关掉就把定时器停了，别让它在后台空转。
         if (_armed)
         {
@@ -929,6 +937,7 @@ public partial class MainWindow : Window
         CodexWork.Describe(
             _armed,
             _work,
+            _sawWork,
             _idleSince,
             DateTimeOffset.Now,
             TimeSpan.FromMinutes(_settings.ShutdownIdleMinutes));

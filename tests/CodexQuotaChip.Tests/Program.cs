@@ -464,26 +464,31 @@ static void TestShutdownAfterWork()
     Equal(false, CodexWork.TimeToShutdown(null, now, idle), "no activity seen at all never shuts down");
 
     Strings.Use("zh");
-    Equal(CodexWork.Describe(false, null, null, now, idle) == Strings.ShutdownOff, true,
+    Equal(CodexWork.Describe(false, null, false, null, now, idle) == Strings.ShutdownOff, true,
         "switched off reads off, even when the machine has been quiet for hours");
-    Equal(CodexWork.Describe(true, null, null, now, idle) == Strings.ShutdownChecking, true,
+    Equal(CodexWork.Describe(true, null, false, null, now, idle) == Strings.ShutdownChecking, true,
         "switched on without a reading yet reads as still looking");
-    Equal(CodexWork.Describe(true, new CodexWork.WorkReading(false, "idle", "", now), null, now, idle) == Strings.ShutdownChecking, true,
-        "idle but no observed quiet yet still reads as still looking");
+    // 还没见它干活：明说在等，而不是假装在倒计时。
+    Equal(CodexWork.Describe(true, new CodexWork.WorkReading(false, "idle", "", now), false, null, now, idle) == Strings.ShutdownWaitingWork, true,
+        "idle but codex has not worked since arming: says it is waiting for work");
+
+    // 见过它干活、但现在还没记下安静起点：仍然算「还在看」。
+    Equal(CodexWork.Describe(true, new CodexWork.WorkReading(false, "idle", "", now), true, null, now, idle) == Strings.ShutdownChecking, true,
+        "worked once but no quiet tick yet reads as still looking");
 
     var quiet = new CodexWork.WorkReading(false, "idle", "open=0 newest=180s tag=idle", now.AddMinutes(-3));
-    Equal(CodexWork.Describe(true, quiet, now.AddMinutes(-3), now, idle), Strings.ShutdownIn(2),
+    Equal(CodexWork.Describe(true, quiet, true, now.AddMinutes(-3), now, idle), Strings.ShutdownIn(2),
         "three quiet minutes against a five minute threshold leaves two");
 
     // 还剩 30 秒：显示「1 分钟后」，不出现「0 分钟后」。
-    Equal(CodexWork.Describe(true, quiet, now.AddSeconds(-270), now, idle), Strings.ShutdownIn(1),
+    Equal(CodexWork.Describe(true, quiet, true, now.AddSeconds(-270), now, idle), Strings.ShutdownIn(1),
         "under a minute left still reads as one minute");
 
     var busy = new CodexWork.WorkReading(true, "open", "open=1 newest=6s tag=open", now);
-    Equal(CodexWork.Describe(true, busy, now.AddMinutes(-4), now, idle) == Strings.ShutdownBusy, true,
+    Equal(CodexWork.Describe(true, busy, true, now.AddMinutes(-4), now, idle) == Strings.ShutdownBusy, true,
         "a working Codex is named as such, not counted down");
 
-    Equal(CodexWork.Describe(true, quiet, now.AddMinutes(-9), now, idle) == Strings.ShutdownAboutTo, true,
+    Equal(CodexWork.Describe(true, quiet, true, now.AddMinutes(-9), now, idle) == Strings.ShutdownAboutTo, true,
         "long past the threshold reads as now");
 
     Equal("2m", Readout.Duration(TimeSpan.FromMinutes(2)), "durations under an hour");
@@ -591,35 +596,41 @@ static string Repeat(string line, int times)
 }
 
 // 状态行后面那三个点：1 → 2 → 3 → 1，不多不少。
-// 关机要三个条件同时成立：Codex 不忙、人不忙、安静够久。少一个都不能动手。
+// 关机要四个条件同时成立：见过 Codex 干活、Codex 现在不忙、人不忙、安静够久。少一个都不能动手。
 // 「人不忙」是 2026-11-27 那次误关机的补丁 —— Codex 闲了，但人还在别的工具里写东西。
+// 「见过它干活」是睡前场景的补丁 —— 打开开关、队列还没开始跑，不能被当成「干完了」。
 static void TestShutdownGate()
 {
     var now = DateTimeOffset.Parse("2026-11-27T08:00:00+08:00");
     var idle = TimeSpan.FromMinutes(5);
     var longAgo = now.AddMinutes(-30);
 
+    // 一次都没见它干活：永远不关，连起点都不记。
+    var neverWorked = CodexWork.Decide(codexBusy: false, userActive: false, sawWork: false, idleSince: longAgo, now, idle);
+    Equal(false, neverWorked.Fire, "armed but codex never worked: never shuts down");
+    Equal(null, neverWorked.IdleSince, "and no countdown is started at all");
+
     // 人到电脑前：一律不关，倒计时连起点都不记。
-    var active = CodexWork.Decide(codexBusy: false, userActive: true, idleSince: longAgo, now, idle);
+    var active = CodexWork.Decide(codexBusy: false, userActive: true, sawWork: true, idleSince: longAgo, now, idle);
     Equal(false, active.Fire, "typing on the machine keeps the shutdown away");
     Equal(null, active.IdleSince, "and the countdown starts over");
 
     // Codex 在干活：同理。
-    var busy = CodexWork.Decide(codexBusy: true, userActive: false, idleSince: longAgo, now, idle);
+    var busy = CodexWork.Decide(codexBusy: true, userActive: false, sawWork: true, idleSince: longAgo, now, idle);
     Equal(false, busy.Fire, "codex still working keeps it away");
     Equal(null, busy.IdleSince, "and that countdown starts over too");
 
-    // 两个都闲，但刚闲下来：记下起点，还不关。
-    var fresh = CodexWork.Decide(false, false, null, now, idle);
+    // 都闲，但刚闲下来：记下起点，还不关。
+    var fresh = CodexWork.Decide(codexBusy: false, userActive: false, sawWork: true, idleSince: null, now, idle);
     Equal(false, fresh.Fire, "just went quiet is not five minutes quiet");
     Equal(now, fresh.IdleSince, "the countdown starts when we first saw it quiet");
 
-    // 两个都闲够久：关。
-    var done = CodexWork.Decide(false, false, now.AddMinutes(-6), now, idle);
+    // 都闲够久：关。
+    var done = CodexWork.Decide(codexBusy: false, userActive: false, sawWork: true, idleSince: now.AddMinutes(-6), now, idle);
     Equal(true, done.Fire, "six quiet minutes from both sides fires");
 
     // 差一分钟：不关。
-    var nearly = CodexWork.Decide(false, false, now.AddMinutes(-4), now, idle);
+    var nearly = CodexWork.Decide(codexBusy: false, userActive: false, sawWork: true, idleSince: now.AddMinutes(-4), now, idle);
     Equal(false, nearly.Fire, "four quiet minutes is not yet five");
 }
 
@@ -885,3 +896,4 @@ static void Equal<T>(T expected, T actual, string what)
         throw new InvalidOperationException($"{what}: expected {expected}, got {actual}");
     }
 }
+
